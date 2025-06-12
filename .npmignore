@@ -1,5 +1,8 @@
 NOTE.md
 biome.json
+src
+node_modules
+*.local
 
 # Logs
 logs
@@ -9,9 +12,6 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
-node_modules
-*.local
 
 # Editor directories and files
 .vscode/*

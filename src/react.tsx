@@ -1,8 +1,6 @@
 import { useState, useSyncExternalStore } from 'react';
 import type { Atom, DerivedAtom, PrimitiveAtom } from '.';
 
-export * from '.';
-
 export const useAtom = <Value,>(atom: PrimitiveAtom<Value>) =>
 	[useSyncExternalStore(atom.watch, atom.get), atom.set] as const;
 
