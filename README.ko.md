@@ -213,7 +213,7 @@ const $user = $(
 );
 
 const $user2 = $(
-  (get) => get($user).name,
+  (get) => get($user),
   { equals: (next, prev) => next.name === prev.name },
 );
 
