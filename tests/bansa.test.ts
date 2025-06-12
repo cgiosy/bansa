@@ -1,11 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { $, type ThenableSignal } from './index';
+import { $, type ThenableSignal } from '../src/index';
 
 const flushMicrotasks = () =>
 	new Promise((resolve) => {
 		const { port1, port2 } = new MessageChannel();
 		port1.onmessage = resolve;
 		port2.postMessage(null);
+	});
+const wait = () =>
+	new Promise((resolve) => {
+		setTimeout(resolve, 4);
 	});
 
 const inc = (x: number) => x + 1;
@@ -415,7 +419,7 @@ describe('Atom Library - Advanced Tests', () => {
 		atom2.set(30);
 		await flushMicrotasks();
 		resolve();
-		await flushMicrotasks();
+		await wait();
 		expect(metrics1).toEqual({ mounted: 1, unmounted: 0 });
 		expect(metrics2).toEqual({ mounted: 2, unmounted: 1 });
 		expect(metrics3).toEqual({ mounted: 4, unmounted: 3 });
@@ -573,7 +577,7 @@ describe('Bansa Documentation Examples as Tests', () => {
 	// fetch 모킹
 	const mockFetch = vi.fn();
 	beforeEach(() => {
-		global.fetch = mockFetch;
+		vi.stubGlobal('fetch', mockFetch);
 		mockFetch.mockClear();
 	});
 
