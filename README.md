@@ -82,7 +82,7 @@ You can read the current value of a state using the `atom.get()` method or `atom
 console.log($count.get()); // 42
 console.log($countDouble.get()); // 84
 
-console.log($countDouble.state); // { promise: undefined, error: Symbol(), value: 84 }
+console.log($countDouble.state); // { promise: undefined, error: undefined, value: 84 }
 ```
 
 For derived states, `.get()` can throw. It throws the `Promise` during asynchronous loading and throws the error when in an error state. This is useful when you want to primarily handle the success case and push all exception handling into a `catch` block or similar.

@@ -82,7 +82,7 @@ type AtomState<Value> =
 console.log($count.get()); // 42
 console.log($countDouble.get()); // 84
 
-console.log($countDouble.state); // { promise: undefined, error: Symbol(), value: 84 }
+console.log($countDouble.state); // { promise: undefined, error: undefined, value: 84 }
 ```
 
 파생 상태는 `.get()` 했을 때 throw 될 수 있습니다. 비동기 로딩 중일 땐 해당 `Promise`를 throw하며, 오류 상태일 때는 해당 오류를 throw합니다. 값이 성공적으로 계산된 상황 위주로 처리하고, 예외 상황은 전부 `catch` 블록 등으로 밀어넣고 싶은 상황에서 유용합니다.
