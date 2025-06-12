@@ -13,20 +13,20 @@
     "@types/react-dom": "^19.1.6",
     "vitest": "^3.1.4"
   },
-	"author": "cgiosy",
-	"license": "MIT",
-	"repository": {
-		"type": "git",
-		"url": "git://github.com/cgiosy/bansa.git"
-	},
-	"publishConfig": {
-		"access": "public"
-	},
-	"packageManager": "pnpm@10.11.1",
-	"homepage": "https://github.com/cgiosy/bansa",
-	"keywords": [
-		"bansa",
-		"state",
-		"react"
-	]
+  "author": "cgiosy",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/cgiosy/bansa.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "packageManager": "pnpm@10.11.1",
+  "homepage": "https://github.com/cgiosy/bansa",
+  "keywords": [
+    "bansa",
+    "state",
+    "react"
+  ]
 }
