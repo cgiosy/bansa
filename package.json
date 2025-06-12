@@ -1,0 +1,32 @@
+{
+  "name": "bansa",
+  "version": "0.0.1",
+  "description": "",
+  "type": "module",
+  "scripts": {
+    "test": "vitest",
+    "format": "biome format --write ./src"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.0.0-beta.6",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "vitest": "^3.1.4"
+  },
+	"author": "cgiosy",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git://github.com/cgiosy/bansa.git"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"packageManager": "pnpm@10.11.1",
+	"homepage": "https://github.com/cgiosy/bansa",
+	"keywords": [
+		"bansa",
+		"state",
+		"react"
+	]
+}
