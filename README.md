@@ -16,7 +16,7 @@ You can create a state with the `$` function. There are two types of states.
 
 #### Primitive State
 
-The most basic unit of state. Its value is static and can be updated to any value using the `.set` method.
+The most basic unit of state. It can be updated to any value using the `.set` method.
 
 It is created by passing a normal value (number/string/object, etc.) to the `$` function.
 
@@ -30,7 +30,7 @@ const $user = $({ name: 'John Doe', age: 30 });
 
 #### Derived State
 
-A state whose value is dynamic and has a lifecycle. It cannot be updated directly; it can only be re-executed when the value of a state it depends on changes. If the state is not active (i.e., there are no subscribers), the function will not run, and it is treated as having no dependencies.
+A state whose value is computed by a function and has a lifecycle. It cannot be updated directly; it can only be re-executed when the value of a state it depends on changes. If the state is not active (i.e., there are no subscribers), the function will not run, and it is treated as having no dependencies.
 
 It is created by passing a function to `$`. The arguments to this function are a `get` function, which can read the values of other states, and `{ signal }`, which represents the state's lifetime. The `signal` will be discussed in more detail in another section.
 
