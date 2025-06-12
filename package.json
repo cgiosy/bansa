@@ -1,17 +1,52 @@
 {
   "name": "bansa",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "",
   "type": "module",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "react": {
+        "types": "./dist/react.d.ts",
+        "default": "./dist/react.js"
+      },
+      "default": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
   "scripts": {
+    "build": "pnpm run \"/^build:.*/\"",
+    "build:types": "tsc --noEmit false --emitDeclarationOnly --outDir dist",
+    "build:index": "esbuild src/index.ts --mangle-props=^_ --format=esm --target=es2022 --outfile=dist/index.js",
+    "build:index-browser": "esbuild src/index.ts --mangle-props=^_ --minify --bundle --format=esm --target=es2022 --platform=browser --outfile=dist/index.browser.js",
+    "build:react": "esbuild src/react.tsx --mangle-props=^_ --format=esm --target=es2022 --outfile=dist/react.js",
     "test": "vitest",
-    "format": "biome format --write ./src"
+    "format": "biome format --write ./src",
+		"prepare": "pnpm run build"
   },
   "devDependencies": {
     "@biomejs/biome": "2.0.0-beta.6",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "esbuild": "^0.25.5",
+    "typescript": "^5.8.3",
     "vitest": "^3.1.4"
+  },
+  "peerDependencies": {
+    "@types/react": ">=17.0.0",
+    "react": ">=17.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@types/react": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    }
   },
   "author": "cgiosy",
   "license": "MIT",
