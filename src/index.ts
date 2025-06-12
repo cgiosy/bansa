@@ -489,12 +489,17 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
 						}
 					}
 				},
-				(error) => {
+				(e) => {
 					if (counter === atom._counter) {
-						if (error instanceof Promise) {
+						if (e instanceof Promise) {
 							atom.state.promise = undefined;
 						} else {
-							atom._nextError = error;
+							if (e instanceof Wrapped) {
+								e = e.e;
+							} else {
+								console.error(e);
+							}
+							atom._nextError = e;
 							requestPropagate(atom);
 						}
 					}
