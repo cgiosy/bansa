@@ -30,7 +30,7 @@ const $user = $({ name: 'John Doe', age: 30 });
 
 #### 파생 상태
 
-값이 동적이며, 생명 주기를 가지는 상태입니다. 값을 직접 업데이트할 수 없으며, 의존 중인 상태의 값이 바뀔 때에만 재실행될 수 있습니다. 해당 상태를 구독 중인 곳이 존재하는, 활성화된 상태가 아닐 경우 함수는 실행되지 않으며, 의존성 또한 없는 것으로 취급됩니다.
+값이 동적이며, 생명 주기를 가지는 상태입니다. 값을 직접 업데이트할 수 없으며, 의존 중인 상태의 값이 바뀔 때에만 재실행될 수 있습니다. 활성화된 상태가 아니라면, 즉 해당 상태를 구독 중인 곳이 존재하지 않는다면 함수는 실행되지 않으며, 의존성 또한 없는 것으로 취급됩니다.
 
 `$`에 함수를 전달하여 생성합니다. 전달하는 함수의 인자로는 다른 상태의 값을 읽을 수 있는 `get` 함수와 상태의 수명을 나타내는 `{ signal }`이 주어집니다. `signal`에 대해선 다른 파트에서 더 자세히 다룹니다.
 
@@ -232,10 +232,10 @@ userAtom.set({ id: 2, name: 'Alice' });
 
 ```javascript
 const timer = (time) => new Promise((resolve) => setTimeout(() => resolve(1), time));
-const a = [1, 2, 3, 4, 5].map(() => $(() => timer(1000)));
-const merged = $$((get) => a.map(get));
+const timerAtoms = [1, 2, 3, 4, 5].map(() => $(() => timer(1000)));
+const $timers = $$((get) => timerAtoms.map(get));
 console.time();
-merged.subscribe(() => console.timeEnd());
+$timers.subscribe(() => console.timeEnd());
 ```
 
 참고로 `$$`의 `get` 함수가 `Promise`나 에러를 만났을 때 throw 대신 반환하는 값은 다음 과정으로 만들어집니다:
@@ -246,7 +246,7 @@ const toUndefined = () => undefined;
 Object.setPrototypeOf(o, new Proxy(o, { get: (_, k) => k === Symbol.toPrimitive ? toUndefined : o }));
 ```
 
-이 코드의 `o`는 아무리 프로퍼티 접근 및 호출을 해도 같은 값을 반환합니다. `o.a.b.c().d()().asdf()()()() === o`는 `true`입니다. 따라서, 셀렉터와 filter/map/reduce 등 간단한 메서드로 이뤄진 대부분의 상태 병합 함수에서 문제 없이 전체 코드를 실행할 수 있게 만듭니다. 하지만 만능은 아니므로 약간의 주의가 필요하며, 가급적 상태 병합에만 사용해야 합니다.
+이 코드의 `o`는 아무리 프로퍼티 접근 및 호출을 해도 같은 값을 반환합니다. 예를 들어, `o.a.b.c().d()().asdf()()()() === o`는 `true`입니다. 따라서, 셀렉터와 filter/map/reduce 등 간단한 메서드로 이뤄진 대부분의 상태 병합 함수에서 문제 없이 전체 코드를 실행할 수 있게 만듭니다. 하지만 만능은 아니므로 약간의 주의가 필요하며, 가급적 상태 병합에만 사용해야 합니다.
 
 ## 상세
 

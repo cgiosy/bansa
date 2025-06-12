@@ -246,7 +246,7 @@ const toUndefined = () => undefined;
 Object.setPrototypeOf(o, new Proxy(o, { get: (_, k) => k === Symbol.toPrimitive ? toUndefined : o }));
 ```
 
-The `o` in this code returns the same value no matter how many properties are accessed or functions are called. `o.a.b.c().d()().asdf()()()() === o` is `true`. Therefore, it allows most state-merging functions composed of selectors and simple methods like filter/map/reduce to execute without issues. However, it's not a silver bullet, so some caution is needed, and it should preferably be used only for state merging.
+The `o` in this code returns the same value no matter how many properties are accessed or functions are called. For example, `o.a.b.c().d()().asdf()()()() === o` is `true`. Therefore, it allows most state-merging functions composed of selectors and simple methods like filter/map/reduce to execute without issues. However, it's not a silver bullet, so some caution is needed, and it should preferably be used only for state merging.
 
 ## In-Depth
 
