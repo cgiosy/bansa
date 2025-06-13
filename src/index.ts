@@ -208,7 +208,7 @@ AtomPrototype.prototype.subscribe = function <Value>(
 		try {
 			subscriber(this.state.value!, atomSubscriber._options);
 		} catch (e) {
-			console.error(e);
+			logError(e);
 		}
 	}
 	(this._subscribers ??= new Set()).add(atomSubscriber);
@@ -409,7 +409,7 @@ const propagate = <Value>(atom: AtomInternal<Value>) => {
 			try {
 				subscriber._subscriber(atom.state.value!, subscriber._options);
 			} catch (e) {
-				console.error(e);
+				logError(e);
 			}
 		}
 	}
@@ -497,7 +497,7 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
 							if (e instanceof Wrapped) {
 								e = e.e;
 							} else {
-								console.error(e);
+								logError(e);
 							}
 							atom._nextError = e;
 							requestPropagate(atom);
@@ -522,7 +522,7 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
 			if (e instanceof Wrapped) {
 				e = e.e;
 			} else {
-				console.error(e);
+				logError(e);
 			}
 			if (isPromiseLike(e)) {
 				atom.state.promise = e as PromiseLike<Value>;
@@ -606,4 +606,11 @@ const createThenableSignal = () => {
 		abort: () => ctrl.abort(),
 		signal,
 	};
+};
+
+const logError = (e: unknown) => {
+	// Chrome's console.error doesn't follow the stack trace of the given Error
+	queueMicrotask(() => {
+		throw e;
+	});
 };
