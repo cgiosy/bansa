@@ -226,7 +226,7 @@ userAtom.set({ id: 2, name: 'Alice' });
 
 ### 여러 상태 병합하기
 
-`$$`로 여러 상태를 병합한 새로운 상태를 만들 수 있습니다. 사실 `$`와 똑같지만, `$`의 `get` 함수는 `Promise`나 에러를 만났을 때 즉시 throw하는 반면, `$$`의 `get` 함수는 특별한 객체를 반환하여 최소한의 재실행으로 최대한의 의존성을 추적합니다.
+`$$`로 여러 상태를 병합한 새로운 상태를 만들 수 있습니다. `$`와 사용법은 같지만, `$`의 `get` 함수는 `Promise`나 에러를 만났을 때 즉시 throw하는 반면, `$$`의 `get` 함수는 특별한 객체를 반환하여 최소한의 재실행으로 최대한의 의존성을 추적합니다. 또한, 배열이나 객체를 반환 시 한 단계 깊은 비교를 수행합니다.
 
 다음 코드는 `$`로 상태를 병합하면 5초가 걸리는 반면에, `$$`로 상태를 병합하면 단 1초만이 걸립니다.
 
@@ -247,6 +247,33 @@ Object.setPrototypeOf(o, new Proxy(o, { get: (_, k) => k === Symbol.toPrimitive 
 ```
 
 이 코드의 `o`는 아무리 프로퍼티 접근 및 호출을 해도 같은 값을 반환합니다. 예를 들어, `o.a.b.c().d()().asdf()()()() === o`는 `true`입니다. 따라서, 셀렉터와 filter/map/reduce 등 간단한 메서드로 이뤄진 대부분의 상태 병합 함수에서 문제 없이 전체 코드를 실행할 수 있게 만듭니다. 하지만 만능은 아니므로 약간의 주의가 필요하며, 가급적 상태 병합에만 사용해야 합니다.
+
+또한 상태 병합 시 특정 값들에서 부분씩만 가져와 새로운 객체를 만드는 경우가 흔하므로, `$$`로 병합한 상태의 의존성들이 너무 자주 재실행되지 않도록 `$`의 `equals`를 다음으로 설정합니다:
+
+```typescript
+const shallowEquals = (a: any, b: any): boolean => {
+	if (typeof a !== 'object' || typeof b !== 'object' || !a || !b) return false;
+	const c = a.constructor;
+	if (c !== b.constructor) return false;
+
+	if (c === Array) {
+		let i = a.length;
+		if (i !== b.length) return false;
+		while ((i = i - 1 | 0) >= 0) if (!Object.is(a[i], b[i])) return false;
+		return true;
+	}
+
+	let n = 0;
+	for (const k in a) {
+		if (!(k in b && Object.is(a[k], b[k]))) return false;
+		n = n + 1 | 0;
+	}
+	for (const _ in b) if ((n = n - 1 | 0) < 0) return false;
+	return true;
+};
+```
+
+정확히 한 단계만 더 비교하므로, `{ arr: [...] }`와 같은 객체의 경우 `arr`의 내용이 같더라도 참조가 다르다면 의존성이 재실행됩니다. 필요하다면 `arr` 부분은 다른 `$$`로 감싼 뒤 합치거나, 상태를 직접 `$`로 `equals`를 주고 만드세요.
 
 ## 상세
 

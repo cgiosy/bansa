@@ -342,7 +342,30 @@ export const $$ = <Value>(init: AtomGetter<Value>) =>
 		if (error) throw error;
 		if (promises) throw Promise.all(promises);
 		return result;
+	}, {
+		equals: shallowEquals,
 	});
+
+const shallowEquals = (a: any, b: any): boolean => {
+	if (typeof a !== 'object' || typeof b !== 'object' || !a || !b) return false;
+	const c = a.constructor;
+	if (c !== b.constructor) return false;
+
+	if (c === Array) {
+		let i = a.length;
+		if (i !== b.length) return false;
+		while ((i = i - 1 | 0) >= 0) if (!Object.is(a[i], b[i])) return false;
+		return true;
+	}
+
+	let n = 0;
+	for (const k in a) {
+		if (!(k in b && Object.is(a[k], b[k]))) return false;
+		n = n + 1 | 0;
+	}
+	for (const _ in b) if ((n = n - 1 | 0) < 0) return false;
+	return true;
+};
 
 let pendingUpdateAtoms = false;
 let stack: AtomInternal<any>[] = [];
