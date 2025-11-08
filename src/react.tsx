@@ -1,5 +1,6 @@
 import { useState, useSyncExternalStore } from 'react';
-import type { Atom, DerivedAtom, PrimitiveAtom } from '.';
+import { $ } from '.';
+import type { Atom, AtomGetter, AtomOptions, DerivedAtom, PrimitiveAtom } from '.';
 
 export const useAtomValue = <Value,>(atom: Atom<Value>) =>
 	useSyncExternalStore(
@@ -21,6 +22,9 @@ export const useAtomState = <Value,>(atom: DerivedAtom<Value>) =>
 
 export const useAtom = <Value,>(atom: PrimitiveAtom<Value>) =>
 	[useAtomValue(atom), (newState: Value) => atom.set(newState)] as const;
+
+export const useLocalAtom = ((init, options) => useState(() => $(init, options))[0]) as typeof $;
+export const useLocalAtomValue = <Value, >(init: Value | AtomGetter<Value>, options?: AtomOptions<Value>): Value => useAtomValue(useLocalAtom(init, options));
 
 export const useStateAtom = <Value,>(atom: PrimitiveAtom<Value>) => {
 	const [state, setState] = useState(() => atom.get());
