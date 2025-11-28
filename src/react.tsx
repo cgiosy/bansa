@@ -1,11 +1,19 @@
-import { useState, useSyncExternalStore } from 'react';
+import { use, useState, useSyncExternalStore } from 'react';
 import { $ } from '.';
 import type { Atom, AtomGetter, AtomOptions, DerivedAtom, PrimitiveAtom } from '.';
 
 export const useAtomValue = <Value,>(atom: Atom<Value>) =>
 	useSyncExternalStore(
 		(watcher) => atom.watch(watcher),
-		() => atom.get(),
+		() => {
+			// https://github.com/facebook/react/pull/34032
+			try {
+				return atom.get();
+			} catch (_) {
+				if (atom.state.promise) use(Promise.resolve(atom.state.promise));
+				throw atom.state.error;
+			}
+		},
 	);
 
 export const useAtomState = <Value,>(atom: DerivedAtom<Value>) =>
