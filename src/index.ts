@@ -346,14 +346,14 @@ export const $$ = <Value>(init: AtomGetter<Value>) =>
 		equals: shallowEquals,
 	});
 
-type AtomWithValue<Value> = [Atom<Value>, Value];
-export const createScope = <T extends AtomWithValue<unknown>[]>(
+export type AtomValuePair<Value> = [Atom<Value>, Value];
+export const createScope = (
 	parentScope?: AtomScope | null,
-	atomWithValues?: T,
+	atomValuePairs?: AtomValuePair<unknown>[],
 ): AtomScope => {
 	const scopeMap = new WeakMap<Atom<any>, Atom<any>>();
-	if (atomWithValues) {
-		for (const [atom, value] of atomWithValues) {
+	if (atomValuePairs) {
+		for (const [atom, value] of atomValuePairs) {
 			scopeMap.set(atom, $(value));
 		}
 	}
