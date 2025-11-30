@@ -1,8 +1,23 @@
-import { use, useState, useSyncExternalStore } from 'react';
-import { $ } from '.';
-import type { Atom, AtomGetter, AtomOptions, DerivedAtom, PrimitiveAtom } from '.';
+import { createContext, use, useContext, useState, useSyncExternalStore } from 'react';
+import { $, createScope } from '.';
+import type { Atom, AtomGetter, AtomOptions, AtomScope, DerivedAtom, PrimitiveAtom } from '.';
 
-export const useAtomValue = <Value,>(atom: Atom<Value>) =>
+export const ScopeContext = createContext<AtomScope>(
+	((x) => x) as AtomScope
+);
+
+export const ScopeProvider = ({ children }: { children: React.ReactNode; }) => {
+	const parentScope = useContext(ScopeContext);
+	const scope = useState(() => createScope(parentScope))[0];
+	return (
+		<ScopeContext.Provider value={scope}>
+			{children}
+		</ScopeContext.Provider>
+	);
+};
+
+export const useAtomValue = <Value,>(atom: Atom<Value>) => (
+	atom = useContext(ScopeContext)(atom),
 	useSyncExternalStore(
 		(watcher) => atom.watch(watcher),
 		() => {
@@ -14,9 +29,11 @@ export const useAtomValue = <Value,>(atom: Atom<Value>) =>
 				throw atom.state.error;
 			}
 		},
-	);
+	)
+);
 
-export const useAtomState = <Value,>(atom: DerivedAtom<Value>) =>
+export const useAtomState = <Value,>(atom: DerivedAtom<Value>) => (
+	atom = useContext(ScopeContext)(atom),
 	useSyncExternalStore(
 		(watcher) => atom.watch(watcher),
 		() => {
@@ -26,15 +43,19 @@ export const useAtomState = <Value,>(atom: DerivedAtom<Value>) =>
 			} catch (_) {}
 			return atom.state;
 		},
-	);
+	)
+);
 
-export const useAtom = <Value,>(atom: PrimitiveAtom<Value>) =>
-	[useAtomValue(atom), (newState: Value) => atom.set(newState)] as const;
+export const useAtom = <Value,>(atom: PrimitiveAtom<Value>) => (
+	atom = useContext(ScopeContext)(atom),
+	[useAtomValue(atom), (newState: Value) => atom.set(newState)] as const
+);
 
 export const useLocalAtom = ((init, options) => useState(() => $(init, options))[0]) as typeof $;
 export const useLocalAtomValue = <Value, >(init: Value | AtomGetter<Value>, options?: AtomOptions<Value>): Value => useAtomValue(useLocalAtom(init, options));
 
 export const useStateAtom = <Value,>(atom: PrimitiveAtom<Value>) => {
+	atom = useContext(ScopeContext)(atom);
 	const [state, setState] = useState(() => atom.get());
 	const setStateWithAtom = (newState: Value) => {
 		setState(newState);
