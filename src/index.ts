@@ -324,9 +324,9 @@ export const $$ = <Value>(init: AtomGetter<Value>) =>
 	$((get, options) => {
 		let promises: PromiseLike<Value>[] | undefined;
 		let error: unknown;
-		const result = init((atom) => {
+		const result = init((atom, unwrap) => {
 			try {
-				return get(atom);
+				return get(atom, unwrap as false);
 			} catch (e) {
 				if (!e) {
 					throw e;
@@ -363,14 +363,14 @@ export const createScope = <T extends AtomWithValue<unknown>[]>(
 			if (scopedAtom) return scopedAtom as T;
 		}
 		if ((baseAtom as AtomInternal<never>)._init instanceof Function) return $((get, options) =>
-			(baseAtom as AtomInternal<never>)._init((atom) => {
+			(baseAtom as AtomInternal<never>)._init((atom, unwrap) => {
 				let scopedAtom = scopeMap.get(atom);
 				if (!scopedAtom) {
 					if (parentScope) scopedAtom = parentScope(atom);
 					else if (parentScope !== null) scopedAtom = atom;
 					else scopeMap.set(atom, scopedAtom = $(atom._init));
 				}
-				return get(scopedAtom);
+				return get(scopedAtom, unwrap as false);
 			}, options)
 		) as unknown as T;
 		return $((baseAtom as AtomInternal<any>)._init) as T;
