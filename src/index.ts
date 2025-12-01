@@ -86,12 +86,9 @@ export type AtomScope = {
 	<Value>(baseAtom: PrimitiveAtom<Value>): PrimitiveAtom<Value>;
 	<Value>(baseAtom: DerivedAtom<Value>): DerivedAtom<Value>;
 	<Value>(baseAtom: Atom<Value>): Atom<Value>;
-} & {
-	get: {
-		<Value>(baseAtom: PrimitiveAtom<Value>): PrimitiveAtom<Value>;
-		<Value>(baseAtom: DerivedAtom<Value>): DerivedAtom<Value>;
-		<Value>(baseAtom: Atom<Value>): Atom<Value>;
-	};
+	<Value>(baseAtom: PrimitiveAtom<Value>, create: false): PrimitiveAtom<Value> | undefined;
+	<Value>(baseAtom: DerivedAtom<Value>, create: false): DerivedAtom<Value> | undefined;
+	<Value>(baseAtom: Atom<Value>, create: false): Atom<Value> | undefined;
 };
 
 export type SetLike<Key> =
@@ -346,7 +343,7 @@ export const $$ = <Value>(init: AtomGetter<Value>) =>
 		equals: shallowEquals,
 	});
 
-export type AtomValuePair<Value> = [Atom<Value>, Value];
+export type AtomValuePair<Value> = [Atom<Value>, Value | Atom<Value>];
 export const createScope = (
 	parentScope?: AtomScope | null,
 	atomValuePairs?: AtomValuePair<unknown>[],
@@ -354,27 +351,24 @@ export const createScope = (
 	const scopeMap = new WeakMap<Atom<any>, Atom<any>>();
 	if (atomValuePairs) {
 		for (const [atom, value] of atomValuePairs) {
-			scopeMap.set(atom, $(value));
+			scopeMap.set(atom, value instanceof AtomPrototype ? value : $(value));
 		}
 	}
-	return (<T extends Atom<unknown>>(baseAtom: T): T => {
-		{
-			const scopedAtom = scopeMap.get(baseAtom);
-			if (scopedAtom) return scopedAtom as T;
-		}
-		if ((baseAtom as AtomInternal<never>)._init instanceof Function) return $((get, options) =>
-			(baseAtom as AtomInternal<never>)._init((atom, unwrap) => {
-				let scopedAtom = scopeMap.get(atom);
-				if (!scopedAtom) {
-					if (parentScope) scopedAtom = parentScope(atom);
-					else if (parentScope !== null) scopedAtom = atom;
-					else scopeMap.set(atom, scopedAtom = $(atom._init));
-				}
-				return get(scopedAtom, unwrap as false);
-			}, options)
-		) as unknown as T;
-		return $((baseAtom as AtomInternal<any>)._init) as T;
+	const scope = (<T extends Atom<unknown>>(baseAtom: T, create = true) => {
+		let scopedAtom = scopeMap.get(baseAtom);
+		if (create && !(
+			scopedAtom || parentScope && (scopedAtom = parentScope(baseAtom, false))
+		)) scopeMap.set(baseAtom, scopedAtom = (
+				(baseAtom as AtomInternal<never>)._init instanceof Function
+				? $((get, options) => (baseAtom as AtomInternal<never>)._init(
+					(atom, unwrap) => get(scope(atom), unwrap as false),
+					options,
+				))
+				: $((baseAtom as AtomInternal<any>)._init)
+			) as T);
+		return scopedAtom;
 	}) as AtomScope;
+	return scope;
 };
 
 const shallowEquals = (a: any, b: any): boolean => {

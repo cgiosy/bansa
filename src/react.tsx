@@ -2,9 +2,7 @@ import { createContext, use, useContext, useState, useSyncExternalStore } from '
 import { $, createScope } from '.';
 import type { Atom, AtomGetter, AtomOptions, AtomScope, AtomValuePair, DerivedAtom, PrimitiveAtom } from '.';
 
-export const ScopeContext = createContext<AtomScope>(
-	((x) => x) as AtomScope
-);
+export const ScopeContext = createContext<AtomScope>((x) => x as any);
 
 export const ScopeProvider = ({ value, children }: {
 	value: AtomValuePair<unknown>[],

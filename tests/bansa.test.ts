@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { $, type ThenableSignal } from '../src/index';
+import { $, createScope, type ThenableSignal } from '../src/index';
 
 const flushMicrotasks = () =>
 	new Promise((resolve) => {
@@ -476,7 +476,7 @@ describe('Atom Library - Advanced Tests', () => {
 		await flushMicrotasks(); // Additional wait for promise resolution
 
 		expect(errorAtom.state.error).toBe(error);
-		expect(() => errorAtom.get()).toThrow(error);
+		expect(() => errorAtom.get()).toThrowError(error);
 	});
 
 	it('multiple subscribers receive updates', async () => {
@@ -948,6 +948,120 @@ describe('Bansa Documentation Examples as Tests', () => {
 			vi.advanceTimersByTime(1001); // maxDelay 경과
 			await flushMicrotasks();
 			expect(subscriber).toHaveBeenCalledWith('abc', expect.anything());
+		});
+	});
+
+	// --- 스코프 테스트 ---
+	describe('Scope', () => {
+		it('scope with initial values', async () => {
+			const $x = $(0);
+			const $y = $(1);
+			const $x2 = $(100);
+			const scope = createScope(null, [
+				[$x, $x2],
+				[$y, 101],
+			]);
+
+			const $y2 = scope($y);
+			expect(scope($x)).toBe($x2);
+			expect($y2).not.toBe($y);
+			expect($y2).toBe(scope($y));
+
+			expect($x.get()).toBe(0);
+			expect($y.get()).toBe(1);
+			expect($x2.get()).toBe(100);
+			expect($y2.get()).toBe(101);
+		});
+
+		it('scope with updates (1)', async () => {
+			const $x = $(0);
+			const $y = $((get) => get($x) + 1);
+			const scope = createScope();
+			const $x2 = scope($x);
+			const $y2 = scope($y);
+
+			expect($x.get()).toBe(0);
+			expect($y.get()).toBe(1);
+			expect($x2.get()).toBe(0);
+			expect($y2.get()).toBe(1);
+
+			$x.set(10);
+			await flushMicrotasks();
+
+			expect($x.get()).toBe(10);
+			expect($y.get()).toBe(11);
+			expect($x2.get()).toBe(0);
+			expect($y2.get()).toBe(1);
+
+			$x2.set(100);
+			await flushMicrotasks();
+
+			expect($x.get()).toBe(10);
+			expect($y.get()).toBe(11);
+			expect($x2.get()).toBe(100);
+			expect($y2.get()).toBe(101);
+		});
+
+		it('scope with updates (2)', async () => {
+			const $x = $(0);
+			const $y = $((get) => get($x) + 1);
+			const scope = createScope(null, [
+				[$x, 100],
+			]);
+			const $x2 = scope($x);
+			const $y2 = scope($y);
+
+			expect($x.get()).toBe(0);
+			expect($y.get()).toBe(1);
+			expect($x2.get()).toBe(100);
+			expect($y2.get()).toBe(101);
+
+			$x.set(10);
+			await flushMicrotasks();
+
+			expect($x.get()).toBe(10);
+			expect($y.get()).toBe(11);
+			expect($x2.get()).toBe(100);
+			expect($y2.get()).toBe(101);
+
+			$x2.set(1000);
+			await flushMicrotasks();
+
+			expect($x.get()).toBe(10);
+			expect($y.get()).toBe(11);
+			expect($x2.get()).toBe(1000);
+			expect($y2.get()).toBe(1001);
+		});
+
+		it('scope with updates (3)', async () => {
+			const $x = $(0);
+			const $y = $((get) => get($x) + 1);
+			const $x2 = $(100);
+			const scope = createScope(null, [
+				[$x, $x2],
+			]);
+			const $y2 = scope($y);
+
+			expect($x.get()).toBe(0);
+			expect($y.get()).toBe(1);
+			expect($x2.get()).toBe(100);
+			expect($y2.get()).toBe(101);
+
+			$x.set(10);
+			await flushMicrotasks();
+
+			expect($x.get()).toBe(10);
+			expect($y.get()).toBe(11);
+			expect($x2.get()).toBe(100);
+			expect($y2.get()).toBe(101);
+
+			$x2.set(1000);
+			await flushMicrotasks();
+
+			expect($x.get()).toBe(10);
+			expect($y.get()).toBe(11);
+			expect($x2.get()).toBe(1000);
+			expect($y2.get()).toBe(1001);
 		});
 	});
 
