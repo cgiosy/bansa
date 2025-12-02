@@ -1,4 +1,4 @@
-import { createContext, use, useContext, useState, useSyncExternalStore } from 'react';
+import { createContext, use, useContext, useMemo, useState, useSyncExternalStore } from 'react';
 import { $, createScope } from '.';
 import type { Atom, AtomGetter, AtomOptions, AtomScope, AtomValuePair, DerivedAtom, PrimitiveAtom } from '.';
 
@@ -9,7 +9,7 @@ export const ScopeProvider = ({ value, children }: {
 	children: React.ReactNode;
 }) => {
 	const parentScope = useContext(ScopeContext);
-	const scope = useState(() => createScope(parentScope, value))[0];
+	const scope = useMemo(() => createScope(parentScope, value), [parentScope]);
 	return (
 		<ScopeContext.Provider value={scope}>
 			{children}

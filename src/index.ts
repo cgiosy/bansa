@@ -117,6 +117,7 @@ type PrimitiveAtomInternal<Value> = CommonAtomInternal<Value> &
 	PrimitiveAtom<Value> & {
 		readonly _source: true;
 		readonly _active: true;
+		_needExecute: false;
 		_needPropagate: boolean;
 
 		_init: Value;
@@ -133,6 +134,7 @@ type DerivedAtomInternal<Value> = CommonAtomInternal<Value> &
 		_options: AtomGetOptions;
 		_counter: number;
 		_ctrl?: ThenableSignalController;
+		_nextDependencies?: Set<AtomInternal<any>>;
 		_dependencies?: Set<AtomInternal<any>>;
 	};
 
@@ -168,8 +170,8 @@ AtomPrototype.prototype.get = function <Value>(this: AtomInternal<Value>) {
 		execute(this);
 		disableAtom(this);
 	}
-	if (this.state.promise) throw this.state.promise;
 	if (this.state.error) throw this.state.error;
+	if (this.state.promise) throw this.state.promise;
 	return this.state.value!;
 };
 AtomPrototype.prototype.watch = function <Value>(
@@ -201,7 +203,7 @@ AtomPrototype.prototype.subscribe = function <Value>(
 	};
 	if (!this._active) {
 		requestActivate(this);
-	} else if (!this.state.promise && !this.state.error) {
+	} else if (!this.state.error && !this.state.promise) {
 		try {
 			subscriber(this.state.value!, atomSubscriber._options);
 		} catch (e) {
@@ -260,6 +262,7 @@ PrimitiveAtomPrototype.prototype.set = function <Value>(
 };
 PrimitiveAtomPrototype.prototype._source = true;
 PrimitiveAtomPrototype.prototype._active = true;
+PrimitiveAtomPrototype.prototype._needExecute = false;
 PrimitiveAtomPrototype.prototype._needPropagate = false;
 Object.setPrototypeOf(
 	PrimitiveAtomPrototype.prototype,
@@ -308,7 +311,7 @@ Object.setPrototypeOf(
 	}),
 );
 
-export const inactive = Promise.resolve();
+export const inactive = Promise.reject();
 export const $: CreateAtom = <Value>(
 	init: Value | AtomGetter<Value>,
 	options?: AtomOptions<Value>,
@@ -319,21 +322,13 @@ export const $: CreateAtom = <Value>(
 };
 export const $$ = <Value>(init: AtomGetter<Value>) =>
 	$((get, options) => {
-		let promises: PromiseLike<Value>[] | undefined;
+		let promises: PromiseLike<unknown>[] | undefined;
 		let error: unknown;
-		const result = init((atom, unwrap) => {
-			try {
-				return get(atom, unwrap as false);
-			} catch (e) {
-				if (!e) {
-					throw e;
-				}
-				if (isPromiseLike(e)) {
-					(promises ??= []).push(e as PromiseLike<Value>);
-				} else {
-					error = e;
-				}
-			}
+		const result = init((atom) => {
+			const state = get(atom, false);
+			if (state.error) error = state.error;
+			else if (state.promise) (promises ??= []).push(state.promise);
+			else return state.value;
 			return ouroboros;
 		}, options);
 		if (error) throw error;
@@ -356,6 +351,8 @@ export const createScope = (
 	}
 	const scope = (<T extends Atom<unknown>>(baseAtom: T, create = true) => {
 		let scopedAtom = scopeMap.get(baseAtom);
+		// parentScope에서 발견 -> 이미 active 상태 -> dependencies 존재
+		// 아니라면 직접 생성 -> 어느 scope에 넣어야 할지 추적
 		if (create && !(
 			scopedAtom || parentScope && (scopedAtom = parentScope(baseAtom, false))
 		)) scopeMap.set(baseAtom, scopedAtom = (
@@ -393,6 +390,7 @@ const shallowEquals = (a: any, b: any): boolean => {
 };
 
 let pendingUpdateAtoms = false;
+let updateQueue: AtomInternal<any>[] = [];
 let stack: AtomInternal<any>[] = [];
 const requestActivate = <Value>(atom: DerivedAtomInternal<Value>) => {
 	if (!atom._needExecute) {
@@ -403,7 +401,7 @@ const requestActivate = <Value>(atom: DerivedAtomInternal<Value>) => {
 const requestPropagate = <Value>(atom: AtomInternal<Value>) => {
 	if (!atom._needPropagate) {
 		atom._needPropagate = true;
-		stack.push(atom);
+		updateQueue.push(atom);
 		if (!pendingUpdateAtoms) {
 			pendingUpdateAtoms = true;
 			queueMicrotask(updateAtoms);
@@ -413,8 +411,8 @@ const requestPropagate = <Value>(atom: AtomInternal<Value>) => {
 const updateAtoms = () => {
 	pendingUpdateAtoms = false;
 	{
-		const updatedAtoms = stack;
-		stack = [];
+		const updatedAtoms = updateQueue;
+		updateQueue = [];
 		for (const atom of updatedAtoms) {
 			atom.state.promise = undefined;
 			atom.state.error = atom._nextError;
@@ -422,7 +420,7 @@ const updateAtoms = () => {
 			mark(atom);
 		}
 	}
-	const markedAtoms = stack as DerivedAtomInternal<any>[];
+	const markedAtoms = stack;
 	stack = [];
 	for (let i = markedAtoms.length; i--; ) {
 		const atom = markedAtoms[i];
@@ -438,26 +436,32 @@ const updateAtoms = () => {
 };
 const propagate = <Value>(atom: AtomInternal<Value>) => {
 	atom._needPropagate = false;
-	if (atom._children) {
-		for (const child of atom._children) {
-			child._needExecute = true;
-		}
-	}
 	if (atom._watchers) {
 		for (const watcher of atom._watchers) {
-			watcher();
-		}
-	}
-	if (atom._subscribers && !atom.state.promise && !atom.state.error) {
-		for (const subscriber of atom._subscribers) {
-			if (subscriber._ctrl) {
-				subscriber._ctrl.abort();
-				subscriber._ctrl = undefined;
-			}
 			try {
-				subscriber._subscriber(atom.state.value!, subscriber._options);
+				watcher();
 			} catch (e) {
 				logError(e);
+			}
+		}
+	}
+	if (!atom.state.error && !atom.state.promise) {
+		if (atom._subscribers) {
+			for (const subscriber of atom._subscribers) {
+				if (subscriber._ctrl) {
+					subscriber._ctrl.abort();
+					subscriber._ctrl = undefined;
+				}
+				try {
+					subscriber._subscriber(atom.state.value!, subscriber._options);
+				} catch (e) {
+					logError(e);
+				}
+			}
+		}
+		if (atom._children) {
+			for (const child of atom._children) {
+				child._needExecute = true;
 			}
 		}
 	}
@@ -480,6 +484,7 @@ class Wrapped {
 		this.e = e;
 	}
 }
+const expired = Symbol();
 const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
 	const counter = ++atom._counter;
 	atom._active = true;
@@ -491,32 +496,25 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
 		atom._ctrl = undefined;
 	}
 
-	// TODO: nextDependencies
-	const oldDependencies = atom._dependencies;
-	if (oldDependencies) {
-		atom._dependencies = new Set();
-	}
 	try {
 		const value = atom._init(
 			<V>(anotherAtom: AtomInternal<V>, unwrap = true) => {
-				if (counter !== atom._counter) throw undefined;
+				if (counter !== atom._counter) throw expired;
 				if ((atom as unknown) !== anotherAtom) {
 					if (!anotherAtom._active) {
 						execute(anotherAtom);
 						if (anotherAtom._needPropagate) {
-							anotherAtom._needPropagate = false;
 							propagate(anotherAtom);
 						}
 					}
-					oldDependencies?.delete(anotherAtom);
-					(atom._dependencies ??= new Set()).add(anotherAtom);
+					(atom._nextDependencies ??= new Set()).add(anotherAtom);
 					(anotherAtom._children ??= new Set()).add(atom);
 				}
 				if (!unwrap) return anotherAtom.state;
-				if (anotherAtom.state.promise)
-					throw new Wrapped(anotherAtom.state.promise);
 				if (anotherAtom.state.error)
 					throw new Wrapped(anotherAtom.state.error);
+				if (anotherAtom.state.promise)
+					throw new Wrapped(anotherAtom.state.promise);
 				return anotherAtom.state.value as V;
 			},
 			atom._options,
@@ -527,34 +525,33 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
 			value.then(
 				(value) => {
 					if (counter === atom._counter) {
+						finalizeExecution(atom);
 						if (equals(value, atom.state.value, atom._equals)) {
 							atom.state.promise = undefined;
-							// watchers 재실행 해야 할까?
+							// 동일한 값인데 propagate해줘야 되는 거 마음에 안 든다
+							// watchers만 호출할까?
 						} else {
 							atom._nextValue = value;
 							atom._nextError = undefined;
-							requestPropagate(atom);
 						}
+						requestPropagate(atom);
 					}
 				},
 				(e) => {
 					if (counter === atom._counter) {
-						if (e instanceof Promise) {
-							atom.state.promise = undefined;
+						finalizeExecution(atom);
+						if (e instanceof Wrapped) {
+							e = e.e;
 						} else {
-							if (e instanceof Wrapped) {
-								e = e.e;
-							} else {
-								logError(e);
-							}
-							atom._nextError = e;
-							requestPropagate(atom);
+							logError(e);
 						}
+						atom._nextError = e;
+						requestPropagate(atom);
 					}
 				},
 			);
 		} else {
-			++atom._counter;
+			finalizeExecution(atom);
 			atom.state.error = undefined;
 			if (equals(value, atom.state.value, atom._equals)) {
 				atom._needPropagate = false;
@@ -563,8 +560,8 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
 			}
 		}
 	} catch (e) {
-		++atom._counter;
-		if (!e) {
+		finalizeExecution(atom);
+		if (e === expired) {
 			atom._needPropagate = false;
 		} else {
 			if (e instanceof Wrapped) {
@@ -572,24 +569,30 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
 			} else {
 				logError(e);
 			}
-			if (isPromiseLike(e)) {
-				atom.state.promise = e as PromiseLike<Value>;
-			} else {
-				atom.state.error = e;
-			}
-		}
-	}
-
-	if (oldDependencies) {
-		for (const dep of oldDependencies) {
-			dep._children!.delete(atom);
-			disableAtom(dep);
+			atom.state.error = e;
 		}
 	}
 };
 
-// TODO: 좀 대충 짜놨는데 개선할 수 있을지 고민해봐야
-let disabling = false;
+const finalizeExecution = <Value>(atom: DerivedAtomInternal<Value>) => {
+	++atom._counter;
+
+	const oldDependencies = atom._dependencies;
+	atom._dependencies = atom._nextDependencies;
+	if (oldDependencies) {
+		for (const dep of oldDependencies) {
+			if (!atom._dependencies?.has(dep)) {
+				dep._children!.delete(atom);
+				disableAtom(dep);
+			}
+		}
+		oldDependencies.clear();
+	}
+	atom._nextDependencies = oldDependencies;
+};
+
+let runningGc = false;
+let gcCandidates: Set<DerivedAtomInternal<any>> = new Set();
 const disableAtom = <Value>(atom: AtomInternal<Value>) => {
 	if (
 		!atom._source &&
@@ -598,14 +601,14 @@ const disableAtom = <Value>(atom: AtomInternal<Value>) => {
 		!atom._watchers?.size &&
 		!atom._subscribers?.size
 	) {
-		if (!disabling) {
-			setTimeout(() => {
-				disabling = true;
-				disableAtom(atom);
-				disabling = false;
-			}, 0);
-			return;
+		gcCandidates.add(atom);
+		if (!runningGc) {
+			setTimeout(gc, 0);
 		}
+	}
+};
+const gc = () => {
+	for (const atom of gcCandidates) {
 		atom.state.promise = inactive;
 		atom._nextValue =
 			atom._nextError =
@@ -623,8 +626,17 @@ const disableAtom = <Value>(atom: AtomInternal<Value>) => {
 				disableAtom(dep);
 			}
 			atom._dependencies.clear();
+
+			if (atom._nextDependencies) {
+				for (const dep of atom._nextDependencies) {
+					dep._children!.delete(atom);
+					disableAtom(dep);
+				}
+				atom._nextDependencies.clear();
+			}
 		}
 	}
+	runningGc = false;
 };
 
 const equals = <Value>(

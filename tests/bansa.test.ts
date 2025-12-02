@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { $, createScope, type ThenableSignal } from '../src/index';
+import { $, createScope, DerivedAtom, type ThenableSignal } from '../src/index';
 
 const flushMicrotasks = () =>
 	new Promise((resolve) => {
@@ -550,26 +550,30 @@ describe('Atom Library - Advanced Tests', () => {
 			await new Promise<void>((r) => (resolve = r));
 			return count;
 		});
-		const async2Atom = $((get) => get(asyncAtom));
-		const async3Atom = $((get) => get(async2Atom));
+		const async2Atom = $((get) => get(asyncAtom) % 3);
+		const mockFn = vi.fn((get: (atom: DerivedAtom<number>) => any) => get(async2Atom));
+		const async3Atom = $(mockFn);
 
 		async3Atom.subscribe(nop);
 		await flushMicrotasks();
 		resolve();
 		await flushMicrotasks();
-		await expect(async3Atom.state.value).toBe(1);
+		expect(async3Atom.state.value).toBe(1);
+		expect(mockFn).toHaveBeenCalledTimes(2);
 
 		countAtom.set((c) => c + 1);
 		await flushMicrotasks();
 		resolve();
 		await flushMicrotasks();
-		await expect(async3Atom.state.value).toBe(2);
+		expect(async3Atom.state.value).toBe(2);
+		expect(mockFn).toHaveBeenCalledTimes(3);
 
-		countAtom.set((c) => c + 1);
+		countAtom.set((c) => c + 3);
 		await flushMicrotasks();
 		resolve();
 		await flushMicrotasks();
-		await expect(async3Atom.state.value).toBe(3);
+		expect(async3Atom.state.value).toBe(2);
+		expect(mockFn).toHaveBeenCalledTimes(3);
 	});
 });
 
