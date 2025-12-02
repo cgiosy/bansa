@@ -100,44 +100,6 @@ export type MapLike<Key, Value> =
 	| (Key extends object ? WeakMap<Key, Value> : never)
 	| (Key extends string | number | symbol ? Record<Key, Value> : never);
 
-type AtomInternal<Value> =
-	| PrimitiveAtomInternal<Value>
-	| DerivedAtomInternal<Value>;
-type CommonAtomInternal<Value> = {
-	_equals?: AtomEquals<Value>;
-
-	_marked: boolean;
-	_nextError?: any;
-	_nextValue?: Value;
-	_children?: Set<DerivedAtomInternal<any>>;
-	_watchers?: Set<AtomWatcher>;
-	_subscribers?: Set<AtomSubscribeInternal<Value>>;
-};
-type PrimitiveAtomInternal<Value> = CommonAtomInternal<Value> &
-	PrimitiveAtom<Value> & {
-		readonly _source: true;
-		readonly _active: true;
-		_needExecute: false;
-		_needPropagate: boolean;
-
-		_init: Value;
-	};
-type DerivedAtomInternal<Value> = CommonAtomInternal<Value> &
-	DerivedAtom<Value> & {
-		readonly _source: false;
-		readonly _persist: boolean;
-		_active: boolean;
-		_needExecute: boolean;
-		_needPropagate: boolean;
-
-		_init: AtomGetterInternal<Value>;
-		_options: AtomGetOptions;
-		_counter: number;
-		_ctrl?: ThenableSignalController;
-		_nextDependencies?: Set<AtomInternal<any>>;
-		_dependencies?: Set<AtomInternal<any>>;
-	};
-
 type GetAtomInternal = {
 	<Value>(anotherAtom: AtomInternal<Value>, unwrap?: true): Value;
 	<Value>(anotherAtom: AtomInternal<Value>, unwrap: false): AtomState<Value>;
@@ -152,155 +114,171 @@ type AtomSubscribeInternal<Value> = {
 	_ctrl?: ThenableSignalController;
 };
 
-// JS에서 자료형을 만드는 방법은 여러 가지가 있다:
-// 클로저를 활용해서 익명 함수로 메서드가 구현된 객체 반환하기
-// -> 제일 쉽고 직관적이지만 공통 메서드/멤버 변수가 매번 새로 선언되므로 시간/메모리 측면에서 비효율적이다.
-// 공통 메서드/멤버 변수만 별도의 객체로 추출한 뒤 Object.create로 프로토타입 설정하기
-// -> Object.create가 new보다 2~3배 느린 걸로 보인다. 프로토타입 직접 건드리는 거라 그런가...
-// class 쓰기
-// -> 공통 멤버 변수를 프로토타입에 박을 방법이 없다.
-// function 쓰기
-// -> 그나마 최선의 해결책.
+type AtomInternal<Value> = PrimitiveAtomInternal<Value> | DerivedAtomInternal<Value>;
 
-const AtomPrototype = function <Value>(
-	this: AtomInternal<Value>,
-) {} as unknown as { new <_Value>(): AtomInternal<_Value> };
-AtomPrototype.prototype.get = function <Value>(this: AtomInternal<Value>) {
-	if (!this._active) {
-		execute(this);
-		disableAtom(this);
-	}
-	if (this.state.error) throw this.state.error;
-	if (this.state.promise) throw this.state.promise;
-	return this.state.value!;
-};
-AtomPrototype.prototype.watch = function <Value>(
-	this: AtomInternal<Value>,
-	watcher: AtomWatcher,
-) {
-	if (!this._active) {
-		requestActivate(this);
-	}
-	(this._watchers ??= new Set()).add(watcher);
-	return () => {
-		this._watchers!.delete(watcher);
-		if (!this._watchers!.size) {
-			disableAtom(this);
+abstract class CommonAtomInternal<Value> {
+	_nextValue: Value | undefined;
+	_nextError: any | undefined;
+	_children: Set<DerivedAtomInternal<any>> | undefined;
+	_watchers: Set<AtomWatcher> | undefined;
+	_subscribers: Set<AtomSubscribeInternal<Value>> | undefined;
+
+	abstract readonly _source: boolean;
+	abstract _active: boolean;
+	abstract _needExecute: boolean;
+	abstract _needPropagate: boolean;
+	abstract _marked: boolean;
+
+	abstract readonly _init: Value | AtomGetterInternal<Value>;
+	abstract readonly _equals: AtomEquals<Value> | undefined;
+
+	abstract readonly state: AtomState<Value>;
+
+
+	get(): Value {
+		if (!this._active) {
+			execute(this as unknown as DerivedAtomInternal<Value>);
+			disableAtom(this as unknown as AtomInternal<Value>);
 		}
-	};
-};
-AtomPrototype.prototype.subscribe = function <Value>(
-	this: AtomInternal<Value>,
-	subscriber: AtomSubscribe<unknown>,
-) {
-	const atomSubscriber: AtomSubscribeInternal<unknown> = {
-		_subscriber: subscriber,
-		_options: {
-			get signal() {
-				return (atomSubscriber._ctrl ??= createThenableSignal()).signal;
+		if (this.state.error) throw this.state.error;
+		if (this.state.promise) throw this.state.promise;
+		return this.state.value!;
+	}
+
+	watch(watcher: AtomWatcher): () => void {
+		if (!this._active) {
+			requestActivate(this as unknown as DerivedAtomInternal<Value>);
+		}
+		(this._watchers ??= new Set()).add(watcher);
+		return () => {
+			this._watchers!.delete(watcher);
+			if (!this._watchers!.size) {
+				disableAtom(this as unknown as AtomInternal<Value>);
+			}
+		};
+	}
+
+	subscribe(subscriber: AtomSubscribe<Value>): () => void {
+		const atomSubscriber: AtomSubscribeInternal<Value> = {
+			_subscriber: subscriber,
+			_options: {
+				get signal() {
+					return (atomSubscriber._ctrl ??= createThenableSignal()).signal;
+				},
 			},
-		},
-	};
-	if (!this._active) {
-		requestActivate(this);
-	} else if (!this.state.error && !this.state.promise) {
-		try {
-			subscriber(this.state.value!, atomSubscriber._options);
-		} catch (e) {
-			logError(e);
+		};
+		if (!this._active) {
+			requestActivate(this as unknown as DerivedAtomInternal<Value>);
+		} else if (!this.state.error && !this.state.promise) {
+			try {
+				subscriber(this.state.value!, atomSubscriber._options);
+			} catch (e) {
+				logError(e);
+			}
+		}
+		(this._subscribers ??= new Set()).add(atomSubscriber);
+		return () => {
+			this._subscribers!.delete(atomSubscriber);
+			if (atomSubscriber._ctrl) {
+				atomSubscriber._ctrl.abort();
+				atomSubscriber._ctrl = undefined;
+			}
+			if (!this._subscribers!.size) {
+				disableAtom(this as unknown as AtomInternal<Value>);
+			}
+		};
+	}
+
+	[Symbol.toPrimitive](): Value | undefined {
+		return this.state.value;
+	}
+}
+
+class PrimitiveAtomInternal<Value> extends CommonAtomInternal<Value> {
+	declare readonly _source: true;
+	declare readonly _active: true;
+	declare readonly _needExecute: false;
+	_needPropagate: boolean = false;
+	_marked: boolean = false;
+
+	declare readonly _init: Value;
+	declare readonly _equals: AtomEquals<Value> | undefined;
+
+	declare state: AtomSuccessState<Value>;
+
+
+	constructor(init: Value, options?: AtomOptions<Value>) {
+		super();
+		this._init = init;
+		this._equals = options?.equals;
+		this._nextValue = init;
+		this.state = {
+			promise: undefined,
+			error: undefined,
+			value: init,
+		};
+	}
+
+	set(this: PrimitiveAtomInternal<Value>, value: AtomUpdater<Value>) {
+		const nextValue =
+			value instanceof Function ? value(this._nextValue!) : value;
+		if (!equals(nextValue, this.state.value, this._equals)) {
+			this._nextValue = nextValue;
+			requestPropagate(this);
 		}
 	}
-	(this._subscribers ??= new Set()).add(atomSubscriber);
-	return () => {
-		this._subscribers!.delete(atomSubscriber);
-		if (atomSubscriber._ctrl) {
-			atomSubscriber._ctrl.abort();
-			atomSubscriber._ctrl = undefined;
-		}
-		if (!this._subscribers!.size) {
-			disableAtom(this);
-		}
-	};
-};
-AtomPrototype.prototype[Symbol.toPrimitive] = function <Value>(
-	this: AtomInternal<Value>,
-) {
-	return this.state.value;
-};
+}
+// @ts-expect-error
+PrimitiveAtomInternal.prototype._source = true;
+// @ts-expect-error
+PrimitiveAtomInternal.prototype._active = true;
+// @ts-expect-error
+PrimitiveAtomInternal.prototype._needExecute = false;
 
-const PrimitiveAtomPrototype = function <Value>(
-	this: PrimitiveAtomInternal<Value>,
-	init: Value,
-	options?: AtomOptions<Value>,
-) {
-	this._init = init;
-	this._equals = options?.equals;
+class DerivedAtomInternal<Value> extends CommonAtomInternal<Value> {
+	declare readonly _source: false;
 
-	(this as any).state = {
-		promise: undefined,
-		error: undefined,
-		value: init,
-	};
-	this.state.value = this._nextValue = init;
-} as unknown as {
-	new <_Value>(
-		init: _Value,
-		options?: AtomOptions<_Value>,
-	): PrimitiveAtomInternal<_Value>;
-};
+	_active = false;
+	_needExecute = false;
+	_needPropagate = false;
+	_marked = false;
 
-PrimitiveAtomPrototype.prototype.set = function <Value>(
-	this: PrimitiveAtomInternal<Value>,
-	value: AtomUpdater<unknown>,
-) {
-	const nextValue =
-		value instanceof Function ? value(this._nextValue!) : value;
-	if (!equals(nextValue, this.state.value, this._equals)) {
-		this._nextValue = nextValue;
-		requestPropagate(this);
+	_counter = 0;
+	_ctrl: ThenableSignalController | undefined;
+	_dependencies: Set<AtomInternal<any>> | undefined;
+	_nextDependencies: Set<AtomInternal<any>> | undefined;
+
+	declare readonly _init: AtomGetterInternal<Value>;
+	declare readonly _equals: AtomEquals<Value> | undefined;
+	declare readonly _persist: boolean;
+	declare readonly _options: AtomGetOptions;
+
+	declare state: AtomState<Value>;
+
+
+	constructor(init: AtomGetter<Value>, options?: AtomOptions<Value>) {
+		super();
+		this._init = init as AtomGetterInternal<Value>;
+		this._equals = options?.equals;
+		this._persist = !!options?.persist;
+
+		const self = this;
+		this._options = {
+			get signal() {
+				return (self._ctrl ??= createThenableSignal()).signal;
+			},
+		};
+
+		this.state = {
+			promise: inactive,
+			error: undefined,
+			value: undefined,
+		};
 	}
-};
-PrimitiveAtomPrototype.prototype._source = true;
-PrimitiveAtomPrototype.prototype._active = true;
-PrimitiveAtomPrototype.prototype._needExecute = false;
-PrimitiveAtomPrototype.prototype._needPropagate = false;
-Object.setPrototypeOf(
-	PrimitiveAtomPrototype.prototype,
-	AtomPrototype.prototype,
-);
+}
+// @ts-expect-error
+DerivedAtomInternal.prototype._source = false;
 
-const DerivedAtomPrototype = function <Value>(
-	this: DerivedAtomInternal<Value>,
-	init: AtomGetter<Value>,
-	options?: AtomOptions<Value>,
-) {
-	this._init = init as AtomGetterInternal<Value>;
-	this._equals = options?.equals;
-	(this as any)._persist = options?.persist;
-	(this as any).state = {
-		promise: inactive,
-		error: undefined,
-		value: undefined,
-	};
-
-	const self = this;
-	this._options = {
-		get signal() {
-			return (self._ctrl ??= createThenableSignal()).signal;
-		},
-	};
-} as unknown as {
-	new <Value>(
-		init: AtomGetter<Value>,
-		options?: AtomOptions<Value>,
-	): DerivedAtomInternal<Value>;
-};
-
-DerivedAtomPrototype.prototype._source = false;
-DerivedAtomPrototype.prototype._active = false;
-DerivedAtomPrototype.prototype._needPropagate = false;
-DerivedAtomPrototype.prototype._counter = 0;
-Object.setPrototypeOf(DerivedAtomPrototype.prototype, AtomPrototype.prototype);
 
 const ouroboros: any = () => ouroboros;
 const toUndefined = () => undefined;
@@ -312,13 +290,15 @@ Object.setPrototypeOf(
 );
 
 export const inactive = Promise.reject();
+inactive.catch(toUndefined);
+
 export const $: CreateAtom = <Value>(
 	init: Value | AtomGetter<Value>,
 	options?: AtomOptions<Value>,
 ) => {
 	if (init instanceof Function)
-		return new DerivedAtomPrototype(init, options);
-	return new PrimitiveAtomPrototype(init, options) as any;
+		return new DerivedAtomInternal(init, options);
+	return new PrimitiveAtomInternal(init, options) as any;
 };
 export const $$ = <Value>(init: AtomGetter<Value>) =>
 	$((get, options) => {
@@ -346,7 +326,7 @@ export const createScope = (
 	const scopeMap = new WeakMap<Atom<any>, Atom<any>>();
 	if (atomValuePairs) {
 		for (const [atom, value] of atomValuePairs) {
-			scopeMap.set(atom, value instanceof AtomPrototype ? value : $(value));
+			scopeMap.set(atom, value instanceof CommonAtomInternal ? value : $(value));
 		}
 	}
 	const scope = (<T extends Atom<unknown>>(baseAtom: T, create = true) => {
@@ -603,6 +583,7 @@ const disableAtom = <Value>(atom: AtomInternal<Value>) => {
 	) {
 		gcCandidates.add(atom);
 		if (!runningGc) {
+			runningGc = true;
 			setTimeout(gc, 0);
 		}
 	}
@@ -636,6 +617,7 @@ const gc = () => {
 			}
 		}
 	}
+	gcCandidates.clear();
 	runningGc = false;
 };
 
