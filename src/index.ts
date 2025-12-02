@@ -149,7 +149,7 @@ abstract class CommonAtomInternal<Value> {
 		if (!this._active) {
 			requestActivate(this as unknown as DerivedAtomInternal<Value>);
 		}
-		(this._watchers ??= new Set()).add(watcher);
+		(this._watchers ||= new Set()).add(watcher);
 		return () => {
 			this._watchers!.delete(watcher);
 			if (!this._watchers!.size) {
@@ -163,7 +163,7 @@ abstract class CommonAtomInternal<Value> {
 			_subscriber: subscriber,
 			_options: {
 				get signal() {
-					return (atomSubscriber._ctrl ??= createThenableSignal()).signal;
+					return (atomSubscriber._ctrl ||= createThenableSignal()).signal;
 				},
 			},
 		};
@@ -176,7 +176,7 @@ abstract class CommonAtomInternal<Value> {
 				logError(e);
 			}
 		}
-		(this._subscribers ??= new Set()).add(atomSubscriber);
+		(this._subscribers ||= new Set()).add(atomSubscriber);
 		return () => {
 			this._subscribers!.delete(atomSubscriber);
 			if (atomSubscriber._ctrl) {
@@ -265,7 +265,7 @@ class DerivedAtomInternal<Value> extends CommonAtomInternal<Value> {
 		const self = this;
 		this._options = {
 			get signal() {
-				return (self._ctrl ??= createThenableSignal()).signal;
+				return (self._ctrl ||= createThenableSignal()).signal;
 			},
 		};
 
@@ -307,7 +307,7 @@ export const $$ = <Value>(init: AtomGetter<Value>) =>
 		const result = init((atom) => {
 			const state = get(atom, false);
 			if (state.error) error = state.error;
-			else if (state.promise) (promises ??= []).push(state.promise);
+			else if (state.promise) (promises ||= []).push(state.promise);
 			else return state.value;
 			return ouroboros;
 		}, options);
@@ -332,7 +332,7 @@ export const createScope = (
 	const scope = (<T extends Atom<unknown>>(baseAtom: T, create = true) => {
 		let scopedAtom = scopeMap.get(baseAtom);
 		// parentScope에서 발견 -> 이미 active 상태 -> dependencies 존재
-		// 아니라면 직접 생성 -> 어느 scope에 넣어야 할지 추적
+		// 아니라면 직접 생성
 		if (create && !(
 			scopedAtom || parentScope && (scopedAtom = parentScope(baseAtom, false))
 		)) scopeMap.set(baseAtom, scopedAtom = (
@@ -487,8 +487,8 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
 							propagate(anotherAtom);
 						}
 					}
-					(atom._nextDependencies ??= new Set()).add(anotherAtom);
-					(anotherAtom._children ??= new Set()).add(atom);
+					(atom._nextDependencies ||= new Set()).add(anotherAtom);
+					(anotherAtom._children ||= new Set()).add(atom);
 				}
 				if (!unwrap) return anotherAtom.state;
 				if (anotherAtom.state.error)
@@ -590,30 +590,38 @@ const disableAtom = <Value>(atom: AtomInternal<Value>) => {
 };
 const gc = () => {
 	for (const atom of gcCandidates) {
-		atom.state.promise = inactive;
-		atom._nextValue =
-			atom._nextError =
-			atom.state.error =
-			atom.state.value =
-				undefined;
-		atom._needPropagate = atom._needExecute = atom._active = false;
-		if (atom._ctrl) {
-			atom._ctrl.abort();
-			atom._ctrl = undefined;
-		}
-		if (atom._dependencies) {
-			for (const dep of atom._dependencies) {
-				dep._children!.delete(atom);
-				disableAtom(dep);
+		if (
+			!atom._source &&
+			!atom._persist &&
+			!atom._children?.size &&
+			!atom._watchers?.size &&
+			!atom._subscribers?.size
+		) {
+			atom.state.promise = inactive;
+			atom._nextValue =
+				atom._nextError =
+				atom.state.error =
+				atom.state.value =
+					undefined;
+			atom._needPropagate = atom._needExecute = atom._active = false;
+			if (atom._ctrl) {
+				atom._ctrl.abort();
+				atom._ctrl = undefined;
 			}
-			atom._dependencies.clear();
-
-			if (atom._nextDependencies) {
-				for (const dep of atom._nextDependencies) {
+			if (atom._dependencies) {
+				for (const dep of atom._dependencies) {
 					dep._children!.delete(atom);
 					disableAtom(dep);
 				}
-				atom._nextDependencies.clear();
+				atom._dependencies.clear();
+
+				if (atom._nextDependencies) {
+					for (const dep of atom._nextDependencies) {
+						dep._children!.delete(atom);
+						disableAtom(dep);
+					}
+					atom._nextDependencies.clear();
+				}
 			}
 		}
 	}
