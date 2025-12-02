@@ -445,6 +445,49 @@ describe('Atom Library - Advanced Tests', () => {
 		expect(derivedAtom3.state.value).toEqual(undefined);
 	});
 
+	it('gc test', async () => {
+		const atom1 = $(10);
+
+		const metrics1 = { mounted: 0, unmounted: 0 };
+		const derivedAtom1 = $((get, { signal }) => {
+			metrics1.mounted++;
+			signal.then(() => {
+				metrics1.unmounted++;
+			});
+			return get(atom1);
+		});
+
+		const unsub = derivedAtom1.subscribe(nop);
+		await flushMicrotasks();
+		expect(metrics1).toEqual({ mounted: 1, unmounted: 0 });
+		expect(derivedAtom1.state.value).toEqual(10);
+
+		unsub();
+		await flushMicrotasks();
+		expect(metrics1).toEqual({ mounted: 1, unmounted: 0 });
+		expect(derivedAtom1.state.value).toEqual(10);
+
+		const unsub2 = derivedAtom1.subscribe(nop);
+		await flushMicrotasks();
+		expect(metrics1).toEqual({ mounted: 1, unmounted: 0 });
+		expect(derivedAtom1.state.value).toEqual(10);
+
+		atom1.set(20);
+		await flushMicrotasks();
+		expect(metrics1).toEqual({ mounted: 2, unmounted: 1 });
+		expect(derivedAtom1.state.value).toEqual(20);
+
+		unsub2();
+		await new Promise((r) => setTimeout(r, 10));
+		expect(metrics1).toEqual({ mounted: 2, unmounted: 2 });
+		expect(derivedAtom1.state.value).toEqual(undefined);
+
+		atom1.set(30);
+		await flushMicrotasks();
+		expect(metrics1).toEqual({ mounted: 2, unmounted: 2 });
+		expect(derivedAtom1.state.value).toEqual(undefined);
+	});
+
 	it('should not provide stale values to conditional dependents', async () => {
 		const dataAtom = $([100]);
 		const hasFilterAtom = $(false);
