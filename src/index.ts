@@ -329,20 +329,21 @@ export const createScope = (
 			scopeMap.set(atom, value instanceof CommonAtomInternal ? value : $(value));
 		}
 	}
-	const scope = (<T extends Atom<unknown>>(baseAtom: T, create = true) => {
+	const scope = (<T extends Atom<unknown>>(baseAtom: T) => {
 		let scopedAtom = scopeMap.get(baseAtom);
-		// parentScope에서 발견 -> 이미 active 상태 -> dependencies 존재
-		// 아니라면 직접 생성
-		if (create && !(
-			scopedAtom || parentScope && (scopedAtom = parentScope(baseAtom, false))
-		)) scopeMap.set(baseAtom, scopedAtom = (
+		// TODO: 현재 스코프마다 사용되는 모든 아톰을 저장해서 메모리 사용이 비효율적인데 해결할 수 있을까?
+		// 의존성이 동적이라 많이 어렵다
+		if (!scopedAtom) scopeMap.set(
+			baseAtom,
+			scopedAtom = (
 				(baseAtom as AtomInternal<never>)._init instanceof Function
 				? $((get, options) => (baseAtom as AtomInternal<never>)._init(
-					(atom, unwrap) => get(scope(atom), unwrap as false),
+					(atom, unwrap) => get(scope(atom), unwrap as any),
 					options,
 				))
-				: $((baseAtom as AtomInternal<any>)._init)
-			) as T);
+				: parentScope?.(baseAtom) || $((baseAtom as AtomInternal<any>)._init)
+			) as T,
+		);
 		return scopedAtom;
 	}) as AtomScope;
 	return scope;

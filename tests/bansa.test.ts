@@ -488,6 +488,49 @@ describe('Atom Library - Advanced Tests', () => {
 		expect(derivedAtom1.state.value).toEqual(undefined);
 	});
 
+	it('deep scope', async () => {
+		const $x1 = $(1);
+		const $x2 = $((get) => get($x1) + 1);
+		const $x3 = $((get) => get($x2) + 1);
+		const $x4 = $((get) => get($x3) + 1);
+		const $x5 = $((get) => get($x4) + 1);
+		const identity = (x: any) => x;
+		const scope0 = createScope(identity);
+		const scope1 = createScope(identity, [
+			[$x1, 11],
+		]);
+		const scope2 = createScope(identity, [
+			[$x2, 22],
+		]);
+
+		$x5.subscribe(nop);
+		await flushMicrotasks();
+
+		const $y0 = scope0($x5);
+		const $y1 = scope1($x5);
+		const $y2 = scope2($x5);
+
+		expect($x5.get()).toBe(5);
+		expect($y0.get()).toBe(5);
+		expect($y1.get()).toBe(15);
+		expect($y2.get()).toBe(25);
+
+		$x1.set(101);
+		await flushMicrotasks();
+		expect($x5.get()).toBe(105);
+		expect($y0.get()).toBe(105);
+		expect($y1.get()).toBe(15);
+		expect($y2.get()).toBe(25);
+
+		scope1($x1).set(201);
+		scope2($x1).set(201);
+		await flushMicrotasks();
+		expect($x5.get()).toBe(205);
+		expect($y0.get()).toBe(205);
+		expect($y1.get()).toBe(205);
+		expect($y2.get()).toBe(25);
+	});
+
 	it('should not provide stale values to conditional dependents', async () => {
 		const dataAtom = $([100]);
 		const hasFilterAtom = $(false);
