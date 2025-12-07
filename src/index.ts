@@ -340,7 +340,10 @@ export const createScope = (
 				? $((get, options) => (baseAtom as AtomInternal<never>)._init(
 					(atom, unwrap) => get(scope(atom), unwrap as any),
 					options,
-				))
+				), {
+					equals: (baseAtom as AtomInternal<never>)._equals,
+					persist: (baseAtom as DerivedAtomInternal<never>)._persist,
+				})
 				: parentScope?.(baseAtom) || $((baseAtom as AtomInternal<any>)._init)
 			) as T,
 		);
