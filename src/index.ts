@@ -318,10 +318,12 @@ export const $$ = <Value>(init: AtomGetter<Value>) =>
 		equals: shallowEquals,
 	});
 
-export type AtomValuePair<Value> = [Atom<Value>, Value | Atom<Value>];
-export const createScope = (
+export type AtomValuePair<Value> =
+	| [Atom<Value>, Value | PrimitiveAtom<Value>]
+	| [DerivedAtom<Value>, Value | Atom<Value>];
+export const createScope = <T extends AtomValuePair<unknown>[]>(
 	parentScope?: AtomScope | null,
-	atomValuePairs?: AtomValuePair<unknown>[],
+	atomValuePairs?: T,
 ): AtomScope => {
 	const scopeMap = new WeakMap<Atom<any>, Atom<any>>();
 	if (atomValuePairs) {
@@ -333,20 +335,24 @@ export const createScope = (
 		let scopedAtom = scopeMap.get(baseAtom);
 		// TODO: 현재 스코프마다 사용되는 모든 아톰을 저장해서 메모리 사용이 비효율적인데 해결할 수 있을까?
 		// 의존성이 동적이라 많이 어렵다
-		if (!scopedAtom) scopeMap.set(
-			baseAtom,
-			scopedAtom = (
-				(baseAtom as AtomInternal<never>)._init instanceof Function
-				? $((get, options) => (baseAtom as AtomInternal<never>)._init(
-					(atom, unwrap) => get(scope(atom), unwrap as any),
-					options,
-				), {
-					equals: (baseAtom as AtomInternal<never>)._equals,
-					persist: (baseAtom as DerivedAtomInternal<never>)._persist,
-				})
-				: parentScope?.(baseAtom) || $((baseAtom as AtomInternal<any>)._init)
-			) as T,
-		);
+		if (!scopedAtom) {
+			const parentAtom = parentScope?.(baseAtom);
+			const realBaseAtom = parentAtom || baseAtom;
+			scopeMap.set(
+				baseAtom,
+				scopedAtom = (
+					(realBaseAtom as AtomInternal<never>)._init instanceof Function
+					? $((get, options) => (realBaseAtom as AtomInternal<never>)._init(
+						(atom, unwrap) => get(scope(atom), unwrap as any),
+						options,
+					), {
+						equals: (realBaseAtom as AtomInternal<never>)._equals,
+						persist: (realBaseAtom as DerivedAtomInternal<never>)._persist,
+					})
+					: parentAtom || $((realBaseAtom as AtomInternal<any>)._init)
+				) as T,
+			);
+		}
 		return scopedAtom;
 	}) as AtomScope;
 	return scope;
