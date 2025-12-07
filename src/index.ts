@@ -327,11 +327,6 @@ export const createScope = <T extends AtomValuePair<unknown>[]>(
 ): AtomScope => {
 	const scopeMap = new WeakMap<Atom<any>, Atom<any>>();
 	const atomMap = new WeakMap<Atom<any>, Atom<any>>();
-	if (atomValuePairs) {
-		for (const [atom, value] of atomValuePairs) {
-			scopeMap.set(atom, value instanceof CommonAtomInternal ? value : $(value));
-		}
-	}
 	const scope = (<T extends Atom<unknown>>(baseAtom: T, strict = false) => {
 		let scopedAtom = scopeMap.get(baseAtom);
 		// TODO: 현재 스코프마다 사용되는 모든 아톰을 저장해서 메모리 사용이 비효율적인데 해결할 수 있을까?
@@ -357,6 +352,11 @@ export const createScope = <T extends AtomValuePair<unknown>[]>(
 		}
 		return scopedAtom;
 	}) as AtomScope;
+	if (atomValuePairs) {
+		for (const [atom, value] of atomValuePairs) {
+			scopeMap.set(atom, value instanceof CommonAtomInternal ? scope(value) : $(value));
+		}
+	}
 	return scope;
 };
 
