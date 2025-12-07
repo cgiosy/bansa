@@ -334,11 +334,11 @@ export const createScope = <T extends AtomValuePair<unknown>[]>(
 	}
 	const scope = (<T extends Atom<unknown>>(baseAtom: T, strict = false) => {
 		let scopedAtom = scopeMap.get(baseAtom);
-		if (strict) return scopedAtom || parentScope?.(baseAtom, true);
 		// TODO: 현재 스코프마다 사용되는 모든 아톰을 저장해서 메모리 사용이 비효율적인데 해결할 수 있을까?
 		// 의존성이 동적이라 많이 어렵다
 		if (!scopedAtom) {
 			const parentAtom = parentScope?.(baseAtom, true);
+			if (strict) return parentAtom;
 			const realBaseAtom = parentAtom || baseAtom;
 			atomMap.set(
 				baseAtom,
