@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { $, createScope, DerivedAtom, type ThenableSignal } from '../src/index';
+import { $, createScope, type DerivedAtom, type PrimitiveAtom, type ThenableSignal } from '../src/index';
 
 const flushMicrotasks = () =>
 	new Promise((resolve) => {
@@ -488,7 +488,7 @@ describe('Atom Library - Advanced Tests', () => {
 		expect(derivedAtom1.state.value).toEqual(undefined);
 	});
 
-	it('deep scope', async () => {
+	it('scope with deep dependencies', async () => {
 		const $x1 = $(1);
 		const $x2 = $((get) => get($x1) + 1);
 		const $x3 = $((get) => get($x2) + 1);
@@ -529,6 +529,62 @@ describe('Atom Library - Advanced Tests', () => {
 		expect($y0.get()).toBe(205);
 		expect($y1.get()).toBe(205);
 		expect($y2.get()).toBe(25);
+	});
+
+	it('deep scope', async () => {
+		const $x1 = $(1); // 1
+		const $x2 = $((get) => get($x1) + 1); // 2
+		const $x3 = $((get) => get($x2) + 1); // 3
+		const $x4 = $((get) => get($x3) + 1); // 4
+		const $x5 = $((get) => get($x1) + get($x2) + get($x3) + get($x4)); // 10
+		const identity = (x: any) => x;
+		const scope0 = createScope(identity);
+		const scope1 = createScope(scope0, [
+			[$x1, 11],
+		]);
+		const scope2 = createScope(scope1, [
+			[$x2, 22],
+		]);
+
+		$x5.subscribe(nop);
+		await flushMicrotasks();
+
+		const $y0 = scope0($x5);
+		const $y1 = scope1($x5);
+		const $y2 = scope2($x5);
+
+		expect($x5.get()).toBe(10);
+		expect($y0.get()).toBe(10);
+		expect($y1.get()).toBe(50);
+		expect($y2.get()).toBe(80);
+
+		$x1.set(101);
+		await flushMicrotasks();
+		expect($x5.get()).toBe(410);
+		expect($y0.get()).toBe(410);
+		expect($y1.get()).toBe(50);
+		expect($y2.get()).toBe(80);
+
+		scope1($x1).set(101);
+		await flushMicrotasks();
+		expect($x5.get()).toBe(410);
+		expect($y0.get()).toBe(410);
+		expect($y1.get()).toBe(410);
+		expect($y2.get()).toBe(170);
+
+		scope2($x1).set(201);
+		await flushMicrotasks();
+		expect($x5.get()).toBe(410);
+		expect($y0.get()).toBe(410);
+		expect($y1.get()).toBe(810);
+		expect($y2.get()).toBe(270);
+
+		(scope2($x2) as PrimitiveAtom<number>).set(202);
+		await flushMicrotasks();
+		expect($x5.get()).toBe(410);
+		expect($y0.get()).toBe(410);
+		expect($y1.get()).toBe(810);
+		expect($y2.get()).toBe(810);
 	});
 
 	it('should not provide stale values to conditional dependents', async () => {

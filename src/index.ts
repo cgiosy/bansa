@@ -86,9 +86,9 @@ export type AtomScope = {
 	<Value>(baseAtom: PrimitiveAtom<Value>): PrimitiveAtom<Value>;
 	<Value>(baseAtom: DerivedAtom<Value>): DerivedAtom<Value>;
 	<Value>(baseAtom: Atom<Value>): Atom<Value>;
-	<Value>(baseAtom: PrimitiveAtom<Value>, create: false): PrimitiveAtom<Value> | undefined;
-	<Value>(baseAtom: DerivedAtom<Value>, create: false): DerivedAtom<Value> | undefined;
-	<Value>(baseAtom: Atom<Value>, create: false): Atom<Value> | undefined;
+	<Value>(baseAtom: PrimitiveAtom<Value>, strict: true): PrimitiveAtom<Value> | undefined;
+	<Value>(baseAtom: DerivedAtom<Value>, strict: true): DerivedAtom<Value> | undefined;
+	<Value>(baseAtom: Atom<Value>, strict: true): Atom<Value> | undefined;
 };
 
 export type SetLike<Key> =
@@ -326,19 +326,21 @@ export const createScope = <T extends AtomValuePair<unknown>[]>(
 	atomValuePairs?: T,
 ): AtomScope => {
 	const scopeMap = new WeakMap<Atom<any>, Atom<any>>();
+	const atomMap = new WeakMap<Atom<any>, Atom<any>>();
 	if (atomValuePairs) {
 		for (const [atom, value] of atomValuePairs) {
 			scopeMap.set(atom, value instanceof CommonAtomInternal ? value : $(value));
 		}
 	}
-	const scope = (<T extends Atom<unknown>>(baseAtom: T) => {
+	const scope = (<T extends Atom<unknown>>(baseAtom: T, strict = false) => {
 		let scopedAtom = scopeMap.get(baseAtom);
+		if (strict) return scopedAtom || parentScope?.(baseAtom, true);
 		// TODO: 현재 스코프마다 사용되는 모든 아톰을 저장해서 메모리 사용이 비효율적인데 해결할 수 있을까?
 		// 의존성이 동적이라 많이 어렵다
 		if (!scopedAtom) {
-			const parentAtom = parentScope?.(baseAtom);
+			const parentAtom = parentScope?.(baseAtom, true);
 			const realBaseAtom = parentAtom || baseAtom;
-			scopeMap.set(
+			atomMap.set(
 				baseAtom,
 				scopedAtom = (
 					(realBaseAtom as AtomInternal<never>)._init instanceof Function
