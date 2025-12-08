@@ -318,6 +318,9 @@ export const $$ = <Value>(init: AtomGetter<Value>) =>
 		equals: shallowEquals,
 	});
 
+export const isAtom = (x: unknown): x is Atom<unknown> =>
+	x instanceof CommonAtomInternal;
+
 export type AtomValuePair<Value> =
 	| [Atom<Value>, Value | PrimitiveAtom<Value>]
 	| [DerivedAtom<Value>, Value | Atom<Value>];
@@ -354,7 +357,7 @@ export const createScope = <T extends AtomValuePair<unknown>[]>(
 	}) as AtomScope;
 	if (atomValuePairs) {
 		for (const [atom, value] of atomValuePairs) {
-			scopeMap.set(atom, value instanceof CommonAtomInternal ? scope(value) : $(value));
+			scopeMap.set(atom, isAtom(value) ? scope(value) : $(value));
 		}
 	}
 	return scope;
