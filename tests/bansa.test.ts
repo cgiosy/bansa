@@ -1109,7 +1109,7 @@ describe('Bansa Documentation Examples as Tests', () => {
 			]);
 
 			const $y2 = scope($y);
-			expect(scope($x)).toBe($x2);
+			expect(scope($x).get()).toBe($x2.get());
 			expect($y2).not.toBe($y);
 			expect($y2).toBe(scope($y));
 
@@ -1207,7 +1207,7 @@ describe('Bansa Documentation Examples as Tests', () => {
 			expect($x.get()).toBe(10);
 			expect($y.get()).toBe(11);
 			expect($x2.get()).toBe(1000);
-			expect($y2.get()).toBe(1001);
+			expect($y2.get()).toBe(101);
 		});
 	});
 

@@ -332,6 +332,7 @@ export const createScope = <T extends AtomValuePair<unknown>[]>(
 	const atomMap = new WeakMap<Atom<any>, Atom<any>>();
 	const scope = (<T extends Atom<unknown>>(baseAtom: T, strict = false) => {
 		let scopedAtom = scopeMap.get(baseAtom);
+		if (!strict) scopedAtom ||= atomMap.get(baseAtom);
 		// TODO: 현재 스코프마다 사용되는 모든 아톰을 저장해서 메모리 사용이 비효율적인데 해결할 수 있을까?
 		// 의존성이 동적이라 많이 어렵다
 		if (!scopedAtom) {
@@ -349,6 +350,7 @@ export const createScope = <T extends AtomValuePair<unknown>[]>(
 						equals: (realBaseAtom as AtomInternal<never>)._equals,
 						persist: (realBaseAtom as DerivedAtomInternal<never>)._persist,
 					})
+					// baseAtom을 전달하지 않고 새로 생성하는 이유는 SSR 등에서 사용자 간 상태 공유를 막기 위함
 					: parentAtom || $((realBaseAtom as AtomInternal<any>)._init)
 				) as T,
 			);
