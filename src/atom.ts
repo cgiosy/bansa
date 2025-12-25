@@ -295,6 +295,9 @@ export const $: CreateAtom = <Value>(
 export const isAtom = (x: unknown): x is Atom<unknown> =>
 	x instanceof CommonAtomInternal;
 
+export const isPrimitiveAtom = (x: unknown): x is PrimitiveAtom<unknown> =>
+	x instanceof PrimitiveAtomInternal;
+
 export type AtomValuePair<Value> =
 	| [Atom<Value>, Value | PrimitiveAtom<Value>]
 	| [DerivedAtom<Value>, Value | Atom<Value>];

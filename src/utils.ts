@@ -1,11 +1,11 @@
-import { type PrimitiveAtom, type Atom, type AtomGetter, type DerivedAtom, $, isAtom } from "./atom";
+import { type PrimitiveAtom, type Atom, type AtomGetter, type DerivedAtom, $, isAtom, isPrimitiveAtom } from "./atom";
 
-type Atomized<T> =
+export type Atomized<T> =
 	T extends object
 		? { [K in keyof T]: Atomized<T[K]> }
 		: PrimitiveAtom<T>;
 
-type CollectedAtoms<T> =
+export type CollectedAtoms<T> =
 	T extends Atom<infer U>
 	? U
 	: T extends object
@@ -16,6 +16,10 @@ type CollectAtom = {
 	<Value>(init: AtomGetter<Value>): DerivedAtom<Value>;
 	<Value>(init: Value): DerivedAtom<CollectedAtoms<Value>>;
 };
+
+export type RecursiveOptional<T> = T | (T extends object ? {
+	[P in keyof T]: RecursiveOptional<T[P]>;
+} : never);
 
 const ouroboros: any = () => ouroboros;
 const toUndefined = () => undefined;
@@ -33,6 +37,7 @@ export const atomize = <T, >(tree: T): Atomized<T> => {
 	for (const k in tree) result[k] = atomize(tree[k]);
 	return result;
 };
+
 const getAtom = <T, >(atom: Atom<T>): T => atom.get();
 export const collectAtoms = <T, >(tree: T, get = getAtom): CollectedAtoms<T> => {
 	const recurse = <T, >(t: T): CollectedAtoms<T> => {
@@ -44,6 +49,19 @@ export const collectAtoms = <T, >(tree: T, get = getAtom): CollectedAtoms<T> => 
 		return result;
 	};
 	return recurse(tree);
+};
+
+export const setAtoms = <T, >(tree: T, values: RecursiveOptional<CollectedAtoms<T>>): void => {
+	const recurse = (t: any, v: any) => {
+		if (typeof t === 'object' && t !== null) {
+			if (isAtom(t)) {
+				if (isPrimitiveAtom(t)) t.set(v);
+			} else {
+				for (const k in v) recurse(t[k], v[k]);
+			}
+		}
+	};
+	recurse(tree, values);
 };
 
 export const $$: CollectAtom = <Value>(init: Value | AtomGetter<Value>) => (
