@@ -587,6 +587,29 @@ describe('Atom Library - Advanced Tests', () => {
 		expect($y2.get()).toBe(810);
 	});
 
+	it('deep scope (self referenced)', async () => {
+		const $x = $(1);
+		const identity = (x: any) => x;
+		const scope1 = createScope(identity, [
+			[$x, $((get) => get($x) + 1)],
+		]);
+		const scope2 = createScope(scope1, [
+			[$x, $((get) => get($x) + 1)],
+		]);
+
+		await flushMicrotasks();
+
+		expect($x.get()).toBe(1);
+		expect(scope1($x).get()).toBe(2);
+		expect(scope2($x).get()).toBe(3);
+
+		$x.set(11);
+		await flushMicrotasks();
+		expect($x.get()).toBe(11);
+		expect(scope1($x).get()).toBe(12);
+		expect(scope2($x).get()).toBe(13);
+	});
+
 	it('should not provide stale values to conditional dependents', async () => {
 		const dataAtom = $([100]);
 		const hasFilterAtom = $(false);

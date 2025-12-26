@@ -336,7 +336,12 @@ export const createScope = <T extends AtomValuePair<unknown>[]>(
 	}) as AtomScope;
 	if (atomValuePairs) {
 		for (const [atom, value] of atomValuePairs) {
-			scopeMap.set(atom, isAtom(value) ? scope(value) : $(value));
+			scopeMap.set(
+				atom,
+				isAtom(value)
+					? (parentScope || scope)(value)
+					: $(value),
+			);
 		}
 	}
 	return scope;
