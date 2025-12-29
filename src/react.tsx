@@ -1,6 +1,6 @@
-import { createContext, use, useContext, useMemo, useState, useSyncExternalStore } from 'react';
-import { $, createScope } from '.';
-import type { Atom, AtomGetter, AtomOptions, AtomScope, AtomValuePair, DerivedAtom, PrimitiveAtom } from '.';
+import { createContext, use, useContext, useMemo, useSyncExternalStore } from 'react';
+import { createScope } from '.';
+import type { Atom, AtomScope, AtomValuePair, DerivedAtom, PrimitiveAtom } from '.';
 
 export const ScopeContext = createContext<AtomScope>((x) => x as any);
 
@@ -47,20 +47,17 @@ export const useAtomState = <Value,>(atom: DerivedAtom<Value>) => (
 	)
 );
 
+export const useScopedAtom = (<Value,>(atom: Atom<Value>) =>
+	useContext(ScopeContext)(atom)
+) as UseScopedAtom;
+
 export const useAtom = <Value,>(atom: PrimitiveAtom<Value>) => (
-	atom = useContext(ScopeContext)(atom),
+	atom = useScopedAtom(atom),
 	[useAtomValue(atom), (newState: Value) => atom.set(newState)] as const
 );
 
-export const useLocalAtom = ((init, options) => useState(() => $(init, options))[0]) as typeof $;
-export const useLocalAtomValue = <Value, >(init: Value | AtomGetter<Value>, options?: AtomOptions<Value>): Value => useAtomValue(useLocalAtom(init, options));
-
-export const useStateAtom = <Value,>(atom: PrimitiveAtom<Value>) => {
-	atom = useContext(ScopeContext)(atom);
-	const [state, setState] = useState(() => atom.get());
-	const setStateWithAtom = (newState: Value) => {
-		setState(newState);
-		atom.set(newState);
-	};
-	return [state, setStateWithAtom] as const;
+export type UseScopedAtom = {
+	<Value>(baseAtom: PrimitiveAtom<Value>): PrimitiveAtom<Value>;
+	<Value>(baseAtom: DerivedAtom<Value>): DerivedAtom<Value>;
+	<Value>(baseAtom: Atom<Value>): Atom<Value>;
 };
