@@ -306,7 +306,7 @@ export const createScope = <T extends AtomValuePair<unknown>[]>(
 	atomValuePairs?: T,
 ): AtomScope => {
 	const scopeMap = new WeakMap<Atom<any>, Atom<any>>();
-	const atomMap = new WeakMap<Atom<any>, Atom<any>>();
+	const atomMap = parentScope ? new WeakMap<Atom<any>, Atom<any>>() : scopeMap;
 	const scope = (<T extends Atom<unknown>>(baseAtom: T, strict = false) => {
 		let scopedAtom = scopeMap.get(baseAtom);
 		if (!strict) scopedAtom ||= atomMap.get(baseAtom);
