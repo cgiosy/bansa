@@ -5,10 +5,10 @@ import type { Atom, AtomScope, AtomValuePair, DerivedAtom, PrimitiveAtom } from 
 export const ScopeContext = createContext<AtomScope>((x) => x as any);
 
 export const ScopeProvider = ({ value, children }: {
-	value: AtomValuePair<unknown>[],
+	value?: AtomValuePair<unknown>[],
 	children: React.ReactNode;
 }) => {
-	const parentScope = useContext(ScopeContext);
+	const parentScope = value && useContext(ScopeContext);
 	const scope = useMemo(() => createScope(parentScope, value), [parentScope]);
 	return (
 		<ScopeContext.Provider value={scope}>
