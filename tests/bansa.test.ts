@@ -144,6 +144,27 @@ describe('Atom Library - Basic Tests', () => {
 		expect(mockFn).not.toHaveBeenCalled();
 	});
 
+	it('derived atom undefined value', async () => {
+		const atom = $(0);
+		const derivedAtom = $((get) => get(atom) === 0 ? undefined : true);
+
+		const mockFn = vi.fn();
+		const unsub = derivedAtom.subscribe(mockFn);
+		await flushMicrotasks();
+		expect(mockFn).toHaveBeenCalledWith(undefined, expect.anything());
+		mockFn.mockClear();
+
+		atom.set(1);
+		await flushMicrotasks();
+		expect(mockFn).toHaveBeenCalledWith(true, expect.anything());
+		mockFn.mockClear();
+
+		unsub();
+		atom.set(0);
+		await flushMicrotasks();
+		expect(mockFn).not.toHaveBeenCalled();
+	});
+
 	it('atom watch', async () => {
 		const atom = $(42);
 		const derivedAtom = $((get) => Promise.resolve(get(atom) * 2));

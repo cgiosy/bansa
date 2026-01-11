@@ -446,6 +446,7 @@ class Wrapped {
 const expired = Symbol();
 const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
 	const counter = ++atom._counter;
+	const prevActive = atom._active;
 	atom._active = true;
 	atom._needExecute = false;
 	atom.state.promise = undefined;
@@ -485,7 +486,7 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
 				(value) => {
 					if (counter === atom._counter) {
 						finalizeExecution(atom);
-						if (equals(value, atom.state.value, atom._equals)) {
+						if (prevActive && equals(value, atom.state.value, atom._equals)) {
 							atom.state.promise = undefined;
 							// 동일한 값인데 propagate해줘야 되는 거 마음에 안 든다
 							// watchers만 호출할까?
@@ -512,7 +513,7 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
 		} else {
 			finalizeExecution(atom);
 			atom.state.error = undefined;
-			if (equals(value, atom.state.value, atom._equals)) {
+			if (prevActive && equals(value, atom.state.value, atom._equals)) {
 				atom._needPropagate = false;
 			} else {
 				atom.state.value = atom._nextValue = value;
