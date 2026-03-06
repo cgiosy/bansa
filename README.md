@@ -89,6 +89,8 @@ For derived states, `.get()` can throw. It throws the `Promise` during asynchron
 
 If a state is inactive, the `.get()` method temporarily transitions it to an active state. Naturally, the state and all its dependencies will be re-executed. "Temporarily" means at least until the end of the current microtask. This means that calling `.get()` synchronously multiple times in a row will not cause everything to re-execute each time.
 
+When handling asynchronous state, you'll rarely need to use this. Use `.subscribe`, or `.watch` and `.state` instead."
+
 ### Updating State
 
 You can update the value of a primitive state using the `.set(updater)` method. If `updater` is a normal value, the state is updated to that value. If it's a function, the state is updated with `updater(nextValue)`, where `nextValue` is the state's 'pending value'.

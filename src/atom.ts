@@ -17,23 +17,23 @@ export type AtomInit<Value> = Value | AtomGetter<Value>;
 export type AtomUpdater<Value> = Value | AtomReducer<Value>;
 // TODO: readonly
 export type AtomInactiveState<Value> = {
-  promise: typeof inactive;
   error: any;
+  promise: typeof inactive;
   value?: Value;
 };
 export type AtomPromiseState<Value> = {
-  promise: PromiseLike<Value>;
   error: any;
+  promise: PromiseLike<Value>;
   value?: Value;
 };
 export type AtomSuccessState<Value> = {
-  promise: undefined;
   error: undefined;
+  promise: undefined;
   value: Value;
 };
 export type AtomErrorState<Value> = {
-  promise: undefined;
   error: any;
+  promise: undefined;
   value?: Value;
 };
 export type AtomState<Value> =
@@ -107,6 +107,7 @@ type AtomInternal<Value> = PrimitiveAtomInternal<Value> | DerivedAtomInternal<Va
 abstract class CommonAtomInternal<Value> {
   _nextValue: Value | undefined;
   _nextError: any | undefined;
+  _notifySubscribers = true;
   _children: Set<DerivedAtomInternal<any>> | undefined;
   _watchers: Set<AtomWatcher> | undefined;
   _subscribers: Set<AtomSubscribeInternal<Value>> | undefined;
@@ -383,7 +384,7 @@ const propagate = <Value>(atom: AtomInternal<Value>) => {
       }
     }
   }
-  if (!atom.state.error && !atom.state.promise) {
+  if (atom._notifySubscribers && !atom.state.error && !atom.state.promise) {
     if (atom._subscribers) {
       for (const subscriber of atom._subscribers) {
         if (subscriber._ctrl) {
@@ -425,9 +426,11 @@ class Wrapped {
 const expired = Symbol();
 const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
   const counter = ++atom._counter;
-  const prevActive = atom._active;
+  const prevSuccess =
+    atom._active && !atom.state.error && !atom.state.promise && atom.state.value !== undefined;
   atom._active = true;
   atom._needExecute = false;
+  atom._nextDependencies?.clear();
   atom.state.promise = undefined;
 
   if (atom._ctrl) {
@@ -438,6 +441,7 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
   try {
     const value = atom._init(<V>(anotherAtom: AtomInternal<V>, unwrap = true) => {
       if (counter !== atom._counter) throw expired;
+
       if ((atom as unknown) !== anotherAtom) {
         if (!anotherAtom._active) {
           execute(anotherAtom);
@@ -448,10 +452,14 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
         (atom._nextDependencies ||= new Set()).add(anotherAtom);
         (anotherAtom._children ||= new Set()).add(atom);
       }
-      if (!unwrap) return anotherAtom.state;
-      if (anotherAtom.state.error) throw new Wrapped(anotherAtom.state.error);
-      if (anotherAtom.state.promise) throw new Wrapped(anotherAtom.state.promise);
-      return anotherAtom.state.value as V;
+
+      const state = anotherAtom.state;
+      if (!unwrap) return state;
+
+      const e = state.error || state.promise;
+      if (e) throw new Wrapped(e);
+
+      return state.value as V;
     }, atom._options);
 
     if (isPromiseLike(value)) {
@@ -460,14 +468,13 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
         (value) => {
           if (counter === atom._counter) {
             finalizeExecution(atom);
-            if (prevActive && equals(value, atom.state.value, atom._equals)) {
-              atom.state.promise = undefined;
-              // 동일한 값인데 propagate해줘야 되는 거 마음에 안 든다
-              // watchers만 호출할까?
-            } else {
+            if (
+              (atom._notifySubscribers =
+                !prevSuccess || !equals(value, atom.state.value!, atom._equals))
+            ) {
               atom._nextValue = value;
-              atom._nextError = undefined;
             }
+            atom._nextError = undefined;
             requestPropagate(atom);
           }
         },
@@ -486,12 +493,15 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
       );
     } else {
       finalizeExecution(atom);
-      atom.state.error = undefined;
-      if (prevActive && equals(value, atom.state.value, atom._equals)) {
-        atom._needPropagate = false;
-      } else {
+      if (
+        (atom._notifySubscribers = !prevSuccess || !equals(value, atom.state.value!, atom._equals))
+      ) {
         atom.state.value = atom._nextValue = value;
+      } else {
+        atom._needPropagate = false;
       }
+      atom.state.error = undefined;
+      atom._nextError = undefined;
     }
   } catch (e) {
     finalizeExecution(atom);
@@ -500,6 +510,10 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
     } else {
       if (e instanceof Wrapped) {
         e = e.e;
+        if (isPromiseLike(e)) {
+          atom.state.promise = e as any;
+          return;
+        }
       } else {
         logError(e);
       }
@@ -581,11 +595,9 @@ const gc = () => {
 
 const equals = <Value>(
   value: Value,
-  prevValue?: Value,
+  prevValue: Value,
   equalsFn?: (value: Value, prevValue: Value) => boolean,
-) =>
-  Object.is(value, prevValue) ||
-  (equalsFn !== undefined && prevValue !== undefined && equalsFn(value, prevValue));
+) => Object.is(value, prevValue) || (equalsFn !== undefined && equalsFn(value, prevValue));
 
 const isPromiseLike = (x: unknown): x is PromiseLike<unknown> =>
   typeof (x as PromiseLike<unknown>)?.then === "function";

@@ -734,14 +734,18 @@ describe("Atom Library - Advanced Tests", () => {
     });
     const async2Atom = $((get) => get(asyncAtom) % 3);
     const mockFn = vi.fn((get: (atom: DerivedAtom<number>) => any) => get(async2Atom));
+    const subMockFn = vi.fn();
     const async3Atom = $(mockFn);
 
-    async3Atom.subscribe(nop);
+    async3Atom.subscribe(subMockFn);
     await flushMicrotasks();
+    expect(mockFn).toHaveBeenCalledTimes(1);
+
     resolve();
     await flushMicrotasks();
     expect(async3Atom.state.value).toBe(1);
     expect(mockFn).toHaveBeenCalledTimes(2);
+    expect(subMockFn).toHaveBeenCalledTimes(1);
 
     countAtom.set((c) => c + 1);
     await flushMicrotasks();
@@ -749,13 +753,16 @@ describe("Atom Library - Advanced Tests", () => {
     await flushMicrotasks();
     expect(async3Atom.state.value).toBe(2);
     expect(mockFn).toHaveBeenCalledTimes(3);
+    expect(subMockFn).toHaveBeenCalledTimes(2);
 
     countAtom.set((c) => c + 3);
     await flushMicrotasks();
     resolve();
     await flushMicrotasks();
     expect(async3Atom.state.value).toBe(2);
+    expect(async3Atom.state.promise).toBeUndefined();
     expect(mockFn).toHaveBeenCalledTimes(3);
+    expect(subMockFn).toHaveBeenCalledTimes(2);
   });
 });
 
