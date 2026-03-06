@@ -1,5 +1,5 @@
 {
-  "include": ["**/*.tsx"],
+  "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules", "dist"],
   "compilerOptions": {
     "paths": {

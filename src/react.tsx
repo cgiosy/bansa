@@ -11,8 +11,12 @@ export const ScopeProvider = ({
   value?: AtomValuePair<unknown>[];
   children: React.ReactNode;
 }) => {
-  const parentScope = value && useContext(ScopeContext);
-  const scope = useMemo(() => createScope(parentScope, value), [parentScope]);
+  const parentScope = useContext(ScopeContext);
+  const scope = useMemo(
+    () => createScope(value && parentScope, value),
+    // oxlint-disable-next-line exhaustive-deps
+    [parentScope, ...(value || []).flat()],
+  );
   return <ScopeContext.Provider value={scope}>{children}</ScopeContext.Provider>;
 };
 

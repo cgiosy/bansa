@@ -76,8 +76,7 @@ export const $$: CollectAtom = <Value>(init: Value | AtomGetter<Value>) =>
             return ouroboros;
           }, options);
           if (error) throw error;
-          if (promises) throw Promise.all(promises);
-          return result;
+          return promises ? Promise.all(promises) : result;
         },
         {
           equals: shallowEquals,
