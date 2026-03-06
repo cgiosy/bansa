@@ -8,6 +8,9 @@ node_modules/
 
 *.tsbuildinfo
 
+.oxfmtrc.*
+oxlint.*
+
 *.log
 pnpm-debug.log*
 .DS_Store
