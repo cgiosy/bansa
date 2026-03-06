@@ -21,11 +21,11 @@ The most basic unit of state. It can be updated to any value using the `.set` me
 It is created by passing a normal value (number/string/object, etc.) to the `$` function.
 
 ```javascript
-import { $ } from 'bansa';
+import { $ } from "bansa";
 
 const $count = $(42);
 
-const $user = $({ name: 'John Doe', age: 30 });
+const $user = $({ name: "John Doe", age: 30 });
 ```
 
 #### Derived State
@@ -38,13 +38,13 @@ It is created by passing a function to `$`. The arguments to this function are a
 const $countDouble = $((get) => get($count) * 2);
 
 const $userMessage = $((get) => {
-	if (get($count) < 50) return 'no hello.';
-	return `Hello, ${get($user).name}!`;
+  if (get($count) < 50) return "no hello.";
+  return `Hello, ${get($user).name}!`;
 });
 
 const $signalExample = $((_, { signal }) => {
-	signal.then(() => console.log("$signalExample died"));
-	return fetch(`/users/${get($count)}`, { signal }).then((res) => res.json());
+  signal.then(() => console.log("$signalExample died"));
+  return fetch(`/users/${get($count)}`, { signal }).then((res) => res.json());
 });
 ```
 
@@ -62,10 +62,10 @@ The second parameter of `get` is an optional `unwrap` option. The default value 
 
 ```typescript
 type AtomState<Value> =
-	| { promise: undefined; error: undefined; value: Value; } // Success
-	| { promise: undefined; error: any; value?: Value; } // Error
-	| { promise: PromiseLike<Value>; error: any; value?: Value; } // Loading
-	| { promise: typeof inactive; error: undefined; value?: Value; } // Inactive
+  | { promise: undefined; error: undefined; value: Value } // Success
+  | { promise: undefined; error: any; value?: Value } // Error
+  | { promise: PromiseLike<Value>; error: any; value?: Value } // Loading
+  | { promise: typeof inactive; error: undefined; value?: Value }; // Inactive
 ```
 
 ##### Keeping a state active
@@ -88,7 +88,6 @@ console.log($countDouble.state); // { promise: undefined, error: undefined, valu
 For derived states, `.get()` can throw. It throws the `Promise` during asynchronous loading and throws the error when in an error state. This is useful when you want to primarily handle the success case and push all exception handling into a `catch` block or similar.
 
 If a state is inactive, the `.get()` method temporarily transitions it to an active state. Naturally, the state and all its dependencies will be re-executed. "Temporarily" means at least until the end of the current microtask. This means that calling `.get()` synchronously multiple times in a row will not cause everything to re-execute each time.
-
 
 ### Updating State
 
@@ -131,8 +130,8 @@ Upon subscription, if the state was inactive, an update is scheduled. During the
 ```javascript
 const $count = $(0);
 const unsubscribe = $count.subscribe((value, { signal }) => {
-	console.log('value', value);
-	signal.then(() => console.log('value end', value));
+  console.log("value", value);
+  signal.then(() => console.log("value end", value));
 });
 
 // value 0
@@ -154,8 +153,8 @@ If you want to subscribe to multiple states simultaneously, you should declare a
 
 ```javascript
 const $merged = $((get) => ({
-	count: get($count),
-	countDouble: get($countDouble),
+  count: get($count),
+  countDouble: get($countDouble),
 }));
 
 $merged.subscribe(({ count, countDouble }) => console.log(`${count} * 2 = ${countDouble}`));
@@ -167,21 +166,21 @@ For a derived state where the function returns a `Promise`, you can use the auto
 
 ```javascript
 const $user = $(async (get) => {
-	const response = await fetch(`/users/${get($count)}`);
-	if (!response.ok) throw new Error('Failed to fetch user');
-	return response.json();
+  const response = await fetch(`/users/${get($count)}`);
+  if (!response.ok) throw new Error("Failed to fetch user");
+  return response.json();
 });
 $user.watch(() => {
-	console.log($user.state);
+  console.log($user.state);
 });
 
 const $userName = $((get) => get($user).name);
 
-const faultyAtom = $(() => Promise.reject(new Error('Something went wrong')));
+const faultyAtom = $(() => Promise.reject(new Error("Something went wrong")));
 faultyAtom.watch(() => {
-	if (!faultyAtom.state.promise && faultyAtom.state.error) {
-		console.error('An error occurred:', faultyAtom.state.error.message);
-	}
+  if (!faultyAtom.state.promise && faultyAtom.state.error) {
+    console.error("An error occurred:", faultyAtom.state.error.message);
+  }
 });
 ```
 
@@ -193,12 +192,12 @@ Like an `AbortSignal`, it can be passed to existing web APIs like `fetch` or `ad
 
 ```javascript
 const $user = $(async (get, { signal }) => {
-	const count = get($count);
-	const json = await fetch(`/users/${count}`, { signal }).then((res) => res.json());
-	signal.then(() => {
-		console.log(count, json, "not used");
-	});
-	return json;
+  const count = get($count);
+  const json = await fetch(`/users/${count}`, { signal }).then((res) => res.json());
+  signal.then(() => {
+    console.log(count, json, "not used");
+  });
+  return json;
 });
 ```
 
@@ -207,19 +206,13 @@ const $user = $(async (get, { signal }) => {
 By default, equality is checked with `Object.is`, so for objects or arrays, an update can occur if the reference is different even if the content is the same. To perform additional equality checks, you can provide an `equals` option when declaring the state. In this case, it first checks with `Object.is`, and if they are different, it checks again with the `equals` function. If either returns true, the value change is ignored.
 
 ```javascript
-const $user = $(
-  { id: 1, name: 'Alice' },
-  { equals: (next, prev) => next.id === prev.id },
-);
+const $user = $({ id: 1, name: "Alice" }, { equals: (next, prev) => next.id === prev.id });
 
-const $user2 = $(
-  (get) => get($user),
-  { equals: (next, prev) => next.name === prev.name },
-);
+const $user2 = $((get) => get($user), { equals: (next, prev) => next.name === prev.name });
 
-userAtom.set({ id: 1, name: 'Bob' });
+userAtom.set({ id: 1, name: "Bob" });
 
-userAtom.set({ id: 2, name: 'Alice' });
+userAtom.set({ id: 2, name: "Alice" });
 ```
 
 In the example above, the first update is ignored because the `id` is the same. The second update has a different `id`, so `$user` is updated, but since the `name` is the same, `$user2` is not updated.
@@ -243,7 +236,10 @@ For reference, the value that `$$`'s `get` function returns instead of throwing 
 ```javascript
 const o = () => o;
 const toUndefined = () => undefined;
-Object.setPrototypeOf(o, new Proxy(o, { get: (_, k) => k === Symbol.toPrimitive ? toUndefined : o }));
+Object.setPrototypeOf(
+  o,
+  new Proxy(o, { get: (_, k) => (k === Symbol.toPrimitive ? toUndefined : o) }),
+);
 ```
 
 The `o` in this code returns the same value no matter how many properties are accessed or functions are called. For example, `o.a.b.c().d()().asdf()()()() === o` is `true`. Therefore, it allows most state-merging functions composed of selectors and simple methods like filter/map/reduce to execute without issues. However, it's not a silver bullet, so some caution is needed, and it should preferably be used only for state merging.
@@ -264,11 +260,11 @@ For example, the following shows a situation where not splitting the state enoug
 const $userId = $(123);
 const $postId = $(456);
 const $pageData = $(async (get, { signal }) => {
-	const user = await fetch(`/users/${get($userId)}`, { signal }).then((res) => res.json());
-	const post = await fetch(`/posts/${get($postId)}`, { signal }).then((res) => res.json());
-	userElm.innerHTML = user.name;
-	postElm.innerHTML = post.html;
-	commentElm.innerHTML = `Hello ${user.name}! Comment to ${post.author}.`;
+  const user = await fetch(`/users/${get($userId)}`, { signal }).then((res) => res.json());
+  const post = await fetch(`/posts/${get($postId)}`, { signal }).then((res) => res.json());
+  userElm.innerHTML = user.name;
+  postElm.innerHTML = post.html;
+  commentElm.innerHTML = `Hello ${user.name}! Comment to ${post.author}.`;
 });
 ```
 
@@ -277,17 +273,23 @@ This code looks simple and clean, but if only one of `userId` or `postId` is upd
 ```javascript
 const $userId = $(123);
 const $user = $((get) => fetch(`/users/${get($userId)}`, { signal }).then((res) => res.json()));
-$user.subscribe((user) => { userElm.innerHTML = user.name; });
+$user.subscribe((user) => {
+  userElm.innerHTML = user.name;
+});
 
 const $postId = $(456);
 const $post = $((get) => fetch(`/posts/${get($postId)}`, { signal }).then((res) => res.json()));
-$post.subscribe((post) => { postElm.innerHTML = post.html; });
+$post.subscribe((post) => {
+  postElm.innerHTML = post.html;
+});
 
 const $pageData = $$((get) => ({
-	userName: get($user).name,
-	postAuthor: get($post).author,
+  userName: get($user).name,
+  postAuthor: get($post).author,
 }));
-$pageData.subscribe(({ userName, postAuthor }) => { commentElm.innerHTML = `Hello ${userName}! Comment to ${postAuthor}.`; });
+$pageData.subscribe(({ userName, postAuthor }) => {
+  commentElm.innerHTML = `Hello ${userName}! Comment to ${postAuthor}.`;
+});
 ```
 
 The number of lines of code has increased slightly, but the previously mentioned problems have been resolved.
@@ -377,30 +379,32 @@ Now, you can read from `$reader` and write to `$writer`. Since `$shared` does no
 
 ```javascript
 const delayedState = (initial, minDelay, maxDelay) => {
-	const $value = $(initial);
-	const $delayedValue = $(initial);
+  const $value = $(initial);
+  const $delayedValue = $(initial);
 
-	const $eventStartTime = $(0);
-	const $eventLastTime = $(0);
-	const $delayedTime = $((get) => Math.min(get($eventStartTime) + maxDelay, get($eventLastTime) + minDelay));
-	const $delayedInfo = $((get) => ({
-		value: get($value),
-		time: get($delayedTime),
-	}));
-	$delayedInfo.subscribe(({ value, time }, { signal }) => {
-		const timeout = Math.max(0, time - Date.now());
-		const timer = setTimeout(() => $delayedValue.set(value), timeout);
-		signal.then(() => clearTimeout(timer));
-	});
+  const $eventStartTime = $(0);
+  const $eventLastTime = $(0);
+  const $delayedTime = $((get) =>
+    Math.min(get($eventStartTime) + maxDelay, get($eventLastTime) + minDelay),
+  );
+  const $delayedInfo = $((get) => ({
+    value: get($value),
+    time: get($delayedTime),
+  }));
+  $delayedInfo.subscribe(({ value, time }, { signal }) => {
+    const timeout = Math.max(0, time - Date.now());
+    const timer = setTimeout(() => $delayedValue.set(value), timeout);
+    signal.then(() => clearTimeout(timer));
+  });
 
-	const update = (value, eager = false) => {
-		const now = eager ? -Infinity : Date.now();
-		if ($value.get() === $delayedValue.get()) $eventStartTime.set(now);
-		$eventLastTime.set(now);
-		$value.set(value);
-	};
+  const update = (value, eager = false) => {
+    const now = eager ? -Infinity : Date.now();
+    if ($value.get() === $delayedValue.get()) $eventStartTime.set(now);
+    $eventLastTime.set(now);
+    $value.set(value);
+  };
 
-	return [$delayedValue, update];
+  return [$delayedValue, update];
 };
 ```
 
@@ -414,46 +418,46 @@ $inputValue.subscribe(console.log);
 
 ```javascript
 const $windowScroll = $((_, { signal }) => {
-	let lastTime = Date.now();
-	const $scrollY = $(window.scrollY);
-	const $scrollOnTop = $((get) => get($scrollY) === 0);
+  let lastTime = Date.now();
+  const $scrollY = $(window.scrollY);
+  const $scrollOnTop = $((get) => get($scrollY) === 0);
 
-	const $scrollMovingAvgY = $(0);
-	const $scrollDirectionY = $((get) => Math.sign(get($scrollMovingAvgY)));
+  const $scrollMovingAvgY = $(0);
+  const $scrollDirectionY = $((get) => Math.sign(get($scrollMovingAvgY)));
 
-	const onScrollChange = () => {
-		const now = Date.now();
-		lastTime = now;
+  const onScrollChange = () => {
+    const now = Date.now();
+    lastTime = now;
 
-		const alpha = 0.995 ** (now - lastTime);
-		const scrollY = window.scrollY;
-		const deltaY = scrollY - $scrollY.get();
-		const movingAvgY = alpha * $scrollMovingAvgY.get() + (1 - alpha) * deltaY;
+    const alpha = 0.995 ** (now - lastTime);
+    const scrollY = window.scrollY;
+    const deltaY = scrollY - $scrollY.get();
+    const movingAvgY = alpha * $scrollMovingAvgY.get() + (1 - alpha) * deltaY;
 
-		$scrollY.set(scrollY);
-		$scrollMovingAvgY.set(movingAvgY);
-	};
-	window.addEventListener('scroll', onScrollChange, {
-		passive: true,
-		signal,
-	});
-	window.addEventListener('resize', onScrollChange, {
-		passive: true,
-		signal,
-	});
+    $scrollY.set(scrollY);
+    $scrollMovingAvgY.set(movingAvgY);
+  };
+  window.addEventListener("scroll", onScrollChange, {
+    passive: true,
+    signal,
+  });
+  window.addEventListener("resize", onScrollChange, {
+    passive: true,
+    signal,
+  });
 
-	return {
-		$scrollY,
-		$scrollOnTop,
-		$scrollMovingAvgY,
-		$scrollDirectionY,
-	};
+  return {
+    $scrollY,
+    $scrollOnTop,
+    $scrollMovingAvgY,
+    $scrollDirectionY,
+  };
 });
 
 const $navHidden = $((get) => {
-	const { $scrollOnTop, $scrollDirectionY } = get($windowScroll);
-	const scrollOnTop = get($scrollOnTop);
-	const directionY = get($scrollDirectionY);
-	return !scrollOnTop && directionY > 0;
+  const { $scrollOnTop, $scrollDirectionY } = get($windowScroll);
+  const scrollOnTop = get($scrollOnTop);
+  const directionY = get($scrollDirectionY);
+  return !scrollOnTop && directionY > 0;
 });
 ```

@@ -2,39 +2,61 @@
   "name": "bansa",
   "version": "0.0.24",
   "description": "",
+  "keywords": [
+    "bansa",
+    "react",
+    "state"
+  ],
+  "homepage": "https://github.com/cgiosy/bansa",
+  "license": "MIT",
+  "author": "cgiosy",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/cgiosy/bansa.git"
+  },
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     "./package.json": "./package.json",
-    "./react": {
-      "types": "./dist/react.d.ts",
-      "default": "./dist/react.js"
-    },
     ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    },
+    "./react": {
+      "types": "./dist/react.d.mts",
+      "default": "./dist/react.mjs"
+    },
+    "./atom": {
+      "types": "./dist/atom.d.mts",
+      "default": "./dist/atom.mjs"
+    },
+    "./utils": {
+      "types": "./dist/utils.d.mts",
+      "default": "./dist/utils.mjs"
     }
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "pnpm run \"/^build:.*/\"",
-    "build:types": "tsc --noEmit false --emitDeclarationOnly --outDir dist",
-    "build:index": "esbuild src/index.ts --mangle-props=^_ --format=esm --target=es2022 --outfile=dist/index.js",
-    "build:index-browser": "esbuild src/index.ts --bundle --mangle-props=^_ --minify --bundle --format=esm --target=es2022 --platform=browser --outfile=dist/index.browser.js",
-    "build:atom": "esbuild src/atom.ts --mangle-props=^_ --format=esm --target=es2022 --outfile=dist/atom.js",
-    "build:utils": "esbuild src/utils.ts --mangle-props=^_ --format=esm --target=es2022 --outfile=dist/utils.js",
-    "build:react": "esbuild src/react.tsx --mangle-props=^_ --format=esm --target=es2022 --outfile=dist/react.js",
+    "build:bundler": "tsdown src/index.ts src/react.tsx src/atom.ts src/utils.ts --dts --mangle-props=^_ --target=es2022",
+    "build:browser": "tsdown src/index.ts --dts --mangle-props=^_ --minify --target=es2022 --platform=browser --out-dir=dist/browser",
     "test": "vitest",
-    "format": "biome format --write ./src",
+    "lint": "pnpm check",
+    "check": "tsc -b --noEmit && oxlint && oxfmt --check",
+    "format": "oxlint --fix && oxfmt",
     "prepare": "pnpm run build"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.3.8",
-    "@types/react": "^19.2.7",
+    "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "esbuild": "^0.27.0",
+    "oxfmt": "^0.36.0",
+    "oxlint": "^1.51.0",
+    "tsdown": "^0.21.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.14"
+    "vitest": "^4.0.18"
   },
   "peerDependencies": {
     "@types/react": ">=17.0.0",
@@ -48,20 +70,5 @@
       "optional": true
     }
   },
-  "author": "cgiosy",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git://github.com/cgiosy/bansa.git"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "packageManager": "pnpm@10.24.0",
-  "homepage": "https://github.com/cgiosy/bansa",
-  "keywords": [
-    "bansa",
-    "state",
-    "react"
-  ]
+  "packageManager": "pnpm@10.30.3"
 }

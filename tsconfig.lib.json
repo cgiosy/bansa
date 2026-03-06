@@ -1,25 +1,20 @@
 {
-  "include": ["**/*.tsx"],
+  "include": ["**/*.ts"],
   "exclude": ["node_modules", "dist"],
   "compilerOptions": {
-    "paths": {
-      "@/*": ["./src/*"]
-    },
     "rootDir": ".",
     "outDir": "dist",
 
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ESNext",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["react", "react-dom", "vitest/globals"],
-    "moduleDetection": "force",
-    "jsx": "react-jsx",
+    // "moduleDetection": "force",
 
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
-    "allowArbitraryExtensions": true,
     "rewriteRelativeImportExtensions": true,
 
     "emitDeclarationOnly": true,
@@ -27,6 +22,7 @@
     "sourceMap": true,
     "declaration": true,
     "declarationMap": true,
+    "erasableSyntaxOnly": true, // No JSX, enums, constructor parameter properties, namespaces
     "verbatimModuleSyntax": true, // Enforce keyword `type` for type imports etc. implies "isolatedModules"
 
     "noFallthroughCasesInSwitch": true,
