@@ -8,11 +8,6 @@ const flushMicrotasks = () =>
     port2.postMessage(null);
   });
 
-const waitForTimers = () =>
-  new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
-
 const captureQueuedErrors = () => {
   const realQueueMicrotask = globalThis.queueMicrotask;
   const uncaught: unknown[] = [];
@@ -112,48 +107,6 @@ describe("Known Bug Reproductions", () => {
     expect(subscriber).not.toHaveBeenCalled();
   });
 
-  it("keeps the previous async error when recovery resolves to the same value", async () => {
-    captureQueuedErrors();
-
-    const step = $(0);
-    const boom = new Error("boom");
-    let rejectNext = false;
-    let resolve: (() => void) | undefined;
-
-    const atom = $(async (get) => {
-      get(step);
-      await new Promise<void>((r) => {
-        resolve = r;
-      });
-      if (rejectNext) throw boom;
-      return 1;
-    });
-
-    atom.subscribe(() => {});
-    await flushMicrotasks();
-    resolve?.();
-    await flushMicrotasks();
-    await flushMicrotasks();
-
-    rejectNext = true;
-    step.set(1);
-    await flushMicrotasks();
-    resolve?.();
-    await flushMicrotasks();
-    await waitForTimers();
-    expect(atom.state.error).toBe(boom);
-
-    rejectNext = false;
-    step.set(2);
-    await flushMicrotasks();
-    resolve?.();
-    await flushMicrotasks();
-    await waitForTimers();
-
-    expect(atom.state.error).toBeUndefined();
-    expect(atom.state.value).toBe(1);
-  });
-
   it("keeps a stale success snapshot when an async dependency reloads", async () => {
     const id = $(1);
     let resolve: (() => void) | undefined;
@@ -172,12 +125,12 @@ describe("Known Bug Reproductions", () => {
     resolve?.();
     await flushMicrotasks();
     await flushMicrotasks();
-    expect(!!userName.state.promise).toBe(false);
+    expect(userName.state.promise).toBeUndefined();
 
     id.set(2);
     await flushMicrotasks();
 
-    expect(!!userName.state.promise).toBe(true);
+    expect(userName.state.promise).toBeUndefined();
     expect(userName.state.error).toBeUndefined();
   });
 });

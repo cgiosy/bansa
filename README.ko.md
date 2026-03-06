@@ -64,8 +64,7 @@ const $signalExample = $((_, { signal }) => {
 type AtomState<Value> =
   | { promise: undefined; error: undefined; value: Value } // 성공
   | { promise: undefined; error: any; value?: Value } // 에러
-  | { promise: PromiseLike<Value>; error: any; value?: Value } // 로딩
-  | { promise: typeof inactive; error: undefined; value?: Value }; // 비활성
+  | { promise: PromiseLike<Value>; error: any; value?: Value }; // 로딩
 ```
 
 ##### 활성 상태로 유지하기

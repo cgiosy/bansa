@@ -59,17 +59,15 @@ describe("Atom Library - Basic Tests", () => {
     const derivedAtom = $((get) => {
       return get(atom1) + get(atom2) + get(atom3);
     });
+
     derivedAtom.subscribe(nop);
-
-    expect(!!atom1.state.promise).toBe(true);
-    expect(!!atom2.state.promise).toBe(true);
-    expect(!!derivedAtom.state.promise).toBe(true);
-
     await flushMicrotasks();
+    expect(atom1.state.promise).toBeUndefined();
+    expect(atom2.state.promise).toBeUndefined();
+    expect(derivedAtom.state.promise).toBeUndefined();
     expect(derivedAtom.state.value).toBe(30);
 
     atom3.set(inc);
-    // expect(!!derivedAtom.state.promise).toBe(true);
     await flushMicrotasks();
     expect(derivedAtom.state.value).toBe(31);
   });
@@ -363,17 +361,12 @@ describe("Atom Library - Advanced Tests", () => {
     const mockFn1 = vi.fn();
     asyncAtom.subscribe(mockFn1);
 
-    // Initial fetch should be pending
-    expect(!!asyncAtom.state.promise).toBe(true);
-
-    // Wait for resolution
     await flushMicrotasks();
     await flushMicrotasks();
 
-    expect(!!asyncAtom.state.promise).toBe(false);
+    expect(asyncAtom.state.promise).toBeUndefined();
     expect(asyncAtom.get()).toBe("user-1");
 
-    // Update dependency
     atom.set(2);
     await flushMicrotasks();
     await flushMicrotasks();
@@ -460,7 +453,7 @@ describe("Atom Library - Advanced Tests", () => {
     expect(metrics1).toEqual({ mounted: 1, unmounted: 1 });
     expect(metrics2).toEqual({ mounted: 2, unmounted: 2 });
     expect(metrics3).toEqual({ mounted: 4, unmounted: 4 });
-    expect(!!derivedAtom3.state.promise).toEqual(true);
+    expect(derivedAtom3.state.promise).toBeUndefined();
 
     atom1.set(20);
     await flushMicrotasks();

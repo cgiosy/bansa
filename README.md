@@ -64,8 +64,7 @@ The second parameter of `get` is an optional `unwrap` option. The default value 
 type AtomState<Value> =
   | { promise: undefined; error: undefined; value: Value } // Success
   | { promise: undefined; error: any; value?: Value } // Error
-  | { promise: PromiseLike<Value>; error: any; value?: Value } // Loading
-  | { promise: typeof inactive; error: undefined; value?: Value }; // Inactive
+  | { promise: PromiseLike<Value>; error: any; value?: Value }; // Loading
 ```
 
 ##### Keeping a state active
