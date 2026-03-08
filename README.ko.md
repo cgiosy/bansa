@@ -58,13 +58,14 @@ const $signalExample = $((_, { signal }) => {
 
 `get`의 두 번째 파라미터로 선택적인 `unwrap`을 할 수 있습니다. 기본값은 `true`이므로 항상 unwrap된 값을 반환하며, `false`로 할 경우 `AtomState<Value>` 타입의 `state`을 반환합니다.
 
-`state`은 상태의 현재 상태를 나타내는 읽기 전용 객체입니다. 비동기 상태거나 오류가 예상되는, 값이 준비되지 않은 상황을 처리(placeholder를 보여주는 등)해야 하는 상황에서 유용합니다. `value`는 마지막으로 성공했을 때의 값을 가집니다. `promise`와 `error`는 현재 로딩 중이거나 에러가 발생한 경우 해당 값을 가집니다. 정확한 타입은 다음과 같습니다:
+`state`은 상태의 현재 상태를 나타내는 읽기 전용 객체입니다. 비동기 상태거나 오류가 예상되는, 값이 준비되지 않은 상황을 처리(placeholder를 보여주는 등)해야 하는 상황에서 유용합니다. `value`는 마지막으로 성공했을 때의 값을 가집니다. `error`와 `promise`는 현재 로딩 중이거나 에러가 발생한 경우 해당 값을 가집니다. `active`는 활성 상태 여부를 나타냅니다. 정확한 타입은 다음과 같습니다:
 
 ```typescript
 type AtomState<Value> =
-  | { promise: undefined; error: undefined; value: Value } // 성공
-  | { promise: undefined; error: any; value?: Value } // 에러
-  | { promise: PromiseLike<Value>; error: any; value?: Value }; // 로딩
+  | { active: false; error: undefined; promise: undefined; value?: Value } // 비활성
+  | { active: true; error: undefined; promise: undefined; value: Value } // 성공
+  | { active: true; error: any; promise: undefined; value?: Value } // 에러
+  | { active: true; error: any; promise: PromiseLike<Value>; value?: Value }; // 로딩
 ```
 
 ##### 활성 상태로 유지하기

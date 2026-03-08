@@ -188,6 +188,7 @@ describe("Atom Library - Basic Tests", () => {
   it("state property reflects current value", async () => {
     const atom = $(42);
     expect(atom.state).toEqual({
+      active: true,
       promise: undefined,
       error: undefined,
       value: 42,

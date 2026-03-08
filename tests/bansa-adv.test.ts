@@ -1,24 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { $ } from "../src/index.ts";
-
-const flushMicrotasks = () =>
-  new Promise((resolve) => {
-    const { port1, port2 } = new MessageChannel();
-    port1.onmessage = resolve;
-    port2.postMessage(null);
-  });
+import { flushMicrotasks } from "./bansa-test-lib.ts";
 
 const captureQueuedErrors = () => {
   const realQueueMicrotask = globalThis.queueMicrotask;
   const uncaught: unknown[] = [];
   vi.stubGlobal("queueMicrotask", (callback: VoidFunction) => {
-    realQueueMicrotask(() => {
+    if (callback.toString().includes("throw e;")) {
       try {
         callback();
-      } catch (error) {
-        uncaught.push(error);
+      } catch (e) {
+        uncaught.push(e);
       }
-    });
+      return;
+    }
+    realQueueMicrotask(callback);
   });
   return uncaught;
 };
@@ -35,7 +31,7 @@ describe("Known Bug Reproductions", () => {
 
     const atom = $((get) => {
       if (get(step) === 1) throw boom;
-      return 123;
+      return get(step) < 10;
     });
 
     const watch = vi.fn();
@@ -43,6 +39,8 @@ describe("Known Bug Reproductions", () => {
     atom.watch(watch);
     atom.subscribe(subscriber);
     await flushMicrotasks();
+    expect(watch).toHaveBeenCalledTimes(1);
+    expect(subscriber).toHaveBeenCalled();
     watch.mockClear();
     subscriber.mockClear();
 
@@ -51,10 +49,17 @@ describe("Known Bug Reproductions", () => {
     await flushMicrotasks();
     expect(watch).toHaveBeenCalledTimes(1);
     expect(subscriber).not.toHaveBeenCalled();
+    expect(uncaught).toEqual([boom]);
 
     step.set(2);
     await flushMicrotasks();
     expect(watch).toHaveBeenCalledTimes(2);
+    expect(subscriber).not.toHaveBeenCalled();
+    expect(uncaught).toEqual([boom]);
+
+    step.set(10);
+    await flushMicrotasks();
+    expect(watch).toHaveBeenCalledTimes(3);
     expect(subscriber).toHaveBeenCalled();
     expect(uncaught).toEqual([boom]);
   });
