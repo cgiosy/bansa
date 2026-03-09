@@ -60,10 +60,7 @@ type ThenableSignalController = {
   signal: ThenableSignal;
 };
 
-export type GetAtom = {
-  <Value>(anotherAtom: Atom<Value>, unwrap?: true): Value;
-  <Value>(anotherAtom: Atom<Value>, unwrap: false): AtomState<Value>;
-};
+export type GetAtom = <Value>(anotherAtom: Atom<Value>) => Value;
 
 type CreateAtom = {
   <Value>(init: AtomGetter<Value>, options?: AtomOptions<Value>): DerivedAtom<Value>;
@@ -92,10 +89,7 @@ export type MapLike<Key, Value> =
   | (Key extends object ? WeakMap<Key, Value> : never)
   | (Key extends string | number | symbol ? Record<Key, Value> : never);
 
-type GetAtomInternal = {
-  <Value>(anotherAtom: AtomInternal<Value>, unwrap?: true): Value;
-  <Value>(anotherAtom: AtomInternal<Value>, unwrap: false): AtomState<Value>;
-};
+type GetAtomInternal = <Value>(anotherAtom: AtomInternal<Value>) => Value;
 type AtomGetterInternal<Value> = (
   get: GetAtomInternal,
   options: AtomGetOptions,
@@ -314,7 +308,7 @@ export const createScope = <T extends AtomValuePair<unknown>[]>(
             ? $(
                 (get, options) =>
                   (realBaseAtom as AtomInternal<never>)._init(
-                    (atom, unwrap) => get(scope(atom), unwrap as any),
+                    (atom) => get(scope(atom)),
                     options,
                   ),
                 {
@@ -447,9 +441,14 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
   const prevSuccess = atom.state.active && !atom.state.error && !atom.state.promise;
 
   atom.state.active = true;
-  atom._needExecute = false;
+  atom._needExecute = atom._valueChanged = false;
 
-  atom._dependencies?.clear();
+  if (atom._dependencies) {
+    for (const dep of atom._dependencies) {
+      dep._children!.delete(atom);
+    }
+    atom._dependencies.clear();
+  }
   atom._resolve = atom._reject = atom.state.promise = undefined;
   if (atom._ctrl) {
     atom._ctrl.abort();
@@ -582,12 +581,16 @@ const gc = () => {
       atom._needPropagate = atom._needExecute = atom.state.active = false;
       atom._valueChanged = atom._source;
       if (atom._allDependencies) {
+        if (atom._dependencies) {
+          for (const dep of atom._dependencies) {
+            dep._children!.delete(atom);
+          }
+          atom._dependencies.clear();
+        }
         for (const dep of atom._allDependencies) {
-          dep._children!.delete(atom);
           disableAtom(dep);
         }
         atom._allDependencies.clear();
-        atom._dependencies?.clear();
       }
     }
   }
