@@ -247,7 +247,7 @@ describe("Atom Library - Error Tests", () => {
     expect(asyncAtom.state.error).toBeUndefined();
     expect(asyncAtom.state.value).toBe(10);
   });
-  
+
   it("sync atom (children)", async () => {
     captureQueuedErrors();
 
@@ -263,7 +263,7 @@ describe("Atom Library - Error Tests", () => {
 
     expect(() => derivedAtom2.get()).toThrowError("Error in derivedAtom1");
   });
-  
+
   it("async atom (children)", async () => {
     captureQueuedErrors();
 

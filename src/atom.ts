@@ -134,8 +134,8 @@ abstract class CommonAtomInternal<Value> {
       execute(this as unknown as DerivedAtomInternal<Value>);
       disableAtom(this as unknown as AtomInternal<Value>);
     }
-    if (this.state.error) throw this.state.error;
     if (this.state.promise) throw this.state.promise;
+    if (this.state.error) throw this.state.error;
     return this.state.value!;
   }
 
@@ -413,8 +413,14 @@ const propagate = <Value>(atom: AtomInternal<Value>) => {
         child._needExecute = true;
       }
     }
+  } else if (atom._children) {
+    for (const child of atom._children) {
+      child.state.error = atom.state.error;
+      child.state.promise = atom.state.promise;
+      child._needPropagate = true;
+    }
   }
-  // TODO: propagate error and promise
+  atom._valueChanged = atom._source;
 };
 const mark = (atom: AtomInternal<any>) => {
   if (!atom._marked) {
@@ -468,8 +474,8 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
       }
 
       const { state } = anotherAtom;
-      if (state.error) throw new Wrapped(state.error);
       if (state.promise) throw loading;
+      if (state.error) throw new Wrapped(state.error);
       return state.value as V;
     }, atom._options);
 
@@ -482,11 +488,9 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
         (value) => {
           if (counter === atom._counter) {
             ++atom._counter;
-            if (
-              (atom._valueChanged = !atom._hasValue || !equals(value, atom.state.value!, atom._equals))
-            ) {
+            if (!atom._hasValue || !equals(value, atom.state.value!, atom._equals)) {
+              atom._valueChanged = atom._hasValue = true;
               atom._nextValue = value;
-              atom._hasValue = true;
             }
             atom._nextError = undefined;
             requestPropagate(atom);
@@ -509,9 +513,9 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
       );
     } else {
       ++atom._counter;
-      if ((atom._valueChanged = !atom._hasValue || !equals(value, atom.state.value!, atom._equals))) {
+      if (!atom._hasValue || !equals(value, atom.state.value!, atom._equals)) {
+        atom._valueChanged = atom._hasValue = true;
         atom.state.value = atom._nextValue = value;
-        atom._hasValue = true;
       } else if (prevSuccess) {
         atom._needPropagate = false;
       }
@@ -576,6 +580,7 @@ const gc = () => {
         atom._ctrl =
           undefined;
       atom._needPropagate = atom._needExecute = atom.state.active = false;
+      atom._valueChanged = atom._source;
       if (atom._allDependencies) {
         for (const dep of atom._allDependencies) {
           dep._children!.delete(atom);

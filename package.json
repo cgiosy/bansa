@@ -41,8 +41,8 @@
   },
   "scripts": {
     "build": "pnpm run \"/^build:.*/\"",
-    "build:bundler": "tsdown src/index.ts src/react.tsx src/atom.ts src/utils.ts --dts --mangle-props=^_ --target=es2022",
-    "build:browser": "tsdown src/index.ts --dts --mangle-props=^_ --minify --target=es2022 --platform=browser --out-dir=dist/browser",
+    "build:bundler": "tsdown src/index.ts src/react.tsx src/atom.ts src/utils.ts --dts --target=es2022",
+    "build:browser": "tsdown src/index.ts --dts --minify --target=es2022 --platform=browser --out-dir=dist/browser",
     "test": "vitest",
     "lint": "pnpm check",
     "check": "tsc -b --noEmit && oxlint && oxfmt --check",

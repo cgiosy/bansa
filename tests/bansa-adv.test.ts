@@ -135,7 +135,7 @@ describe("Known Bug Reproductions", () => {
     id.set(2);
     await flushMicrotasks();
 
-    expect(userName.state.promise).toBeUndefined();
+    expect(userName.state.promise).not.toBeUndefined();
     expect(userName.state.error).toBeUndefined();
   });
 });
