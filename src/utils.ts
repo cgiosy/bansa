@@ -69,7 +69,10 @@ export const $$: CollectAtom = <Value>(init: Value | AtomGetter<Value>) =>
           let promises: PromiseLike<unknown>[] | undefined;
           let error: unknown;
           const result = init((atom) => {
-            const state = get(atom, false);
+            try {
+              get(atom);
+            } catch (e) {}
+            const state = atom.state;
             if (state.error) error = state.error;
             else if (state.promise) (promises ||= []).push(state.promise);
             else return state.value;

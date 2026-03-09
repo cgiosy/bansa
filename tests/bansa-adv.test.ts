@@ -98,14 +98,10 @@ describe("Known Bug Reproductions", () => {
     atom.watch(watcher);
     atom.subscribe(subscriber);
     await flushMicrotasks();
-    await flushMicrotasks();
-    await flushMicrotasks();
     watcher.mockClear();
     subscriber.mockClear();
 
     step.set(1);
-    await flushMicrotasks();
-    await flushMicrotasks();
     await flushMicrotasks();
 
     expect(watcher).toHaveBeenCalled();
@@ -128,7 +124,6 @@ describe("Known Bug Reproductions", () => {
     await flushMicrotasks();
 
     resolve?.();
-    await flushMicrotasks();
     await flushMicrotasks();
     expect(userName.state.promise).toBeUndefined();
 

@@ -1,4 +1,4 @@
-import { createContext, use, useContext, useMemo, useRef, useSyncExternalStore } from "react";
+import React, { createContext, useContext, useMemo, useRef, useSyncExternalStore } from "react";
 import { createScope } from "./atom.ts";
 import type {
   Atom,
@@ -32,6 +32,7 @@ export const ScopeProvider = ({
 const sameAtomState = <Value,>(a: AtomState<Value>, b: AtomState<Value>) =>
   a.promise === b.promise && Object.is(a.error, b.error) && Object.is(a.value, b.value);
 
+const REACT_MAJOR_VERSION = Number(React.version.split(".")[0]);
 export const useAtomValue = <Value,>(atom: Atom<Value>) => {
   atom = useContext(ScopeContext)(atom);
   const getSnapshot = () => {
@@ -39,7 +40,11 @@ export const useAtomValue = <Value,>(atom: Atom<Value>) => {
     try {
       return atom.get();
     } catch (_) {
-      if (atom.state.promise) use(Promise.resolve(atom.state.promise));
+      if (atom.state.promise) {
+        const promise = Promise.resolve(atom.state.promise);
+        if (REACT_MAJOR_VERSION >= 19) React.use(promise);
+        throw promise;
+      }
       throw atom.state.error;
     }
   };

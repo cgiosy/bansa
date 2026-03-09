@@ -111,7 +111,6 @@ abstract class CommonAtomInternal<Value> {
   _valueChanged = true;
 
   abstract readonly _source: boolean;
-  abstract _hasValue: boolean;
   abstract _needExecute: boolean;
   abstract _needPropagate: boolean;
   abstract _marked: boolean;
@@ -184,7 +183,6 @@ abstract class CommonAtomInternal<Value> {
 
 class PrimitiveAtomInternal<Value> extends CommonAtomInternal<Value> {
   declare readonly _source: true;
-  declare readonly _hasValue: true;
   declare readonly _needExecute: false;
   _needPropagate: boolean = false;
   _marked: boolean = false;
@@ -193,14 +191,16 @@ class PrimitiveAtomInternal<Value> extends CommonAtomInternal<Value> {
   declare readonly _equals: AtomEquals<Value> | undefined;
 
   declare state: AtomSuccessState<Value>;
+  declare _hasValue: true;
+  declare _nextValue: Value;
+  declare _nextError: undefined;
   declare _resolve: undefined;
   declare _reject: undefined;
 
   constructor(init: Value, options?: AtomOptions<Value>) {
     super();
-    this._init = init;
+    this._nextValue = this._init = init;
     this._equals = options?.equals;
-    this._nextValue = init;
     this.state = {
       active: true,
       promise: undefined,
@@ -211,7 +211,7 @@ class PrimitiveAtomInternal<Value> extends CommonAtomInternal<Value> {
 
   set(this: PrimitiveAtomInternal<Value>, value: AtomUpdater<Value>) {
     const nextValue = value instanceof Function ? value(this._nextValue!) : value;
-    if (!equals(nextValue, this.state.value, this._equals)) {
+    if (!Object.is(nextValue, this._nextValue)) {
       this._nextValue = nextValue;
       requestPropagate(this);
     }
@@ -219,8 +219,7 @@ class PrimitiveAtomInternal<Value> extends CommonAtomInternal<Value> {
 }
 // @ts-expect-error
 PrimitiveAtomInternal.prototype._source = true;
-// @ts-expect-error
-PrimitiveAtomInternal.prototype._hasValue = false;
+PrimitiveAtomInternal.prototype._hasValue = true;
 // @ts-expect-error
 PrimitiveAtomInternal.prototype._needExecute = false;
 
@@ -307,10 +306,7 @@ export const createScope = <T extends AtomValuePair<unknown>[]>(
           (realBaseAtom as AtomInternal<never>)._init instanceof Function
             ? $(
                 (get, options) =>
-                  (realBaseAtom as AtomInternal<never>)._init(
-                    (atom) => get(scope(atom)),
-                    options,
-                  ),
+                  (realBaseAtom as AtomInternal<never>)._init((atom) => get(scope(atom)), options),
                 {
                   equals: (realBaseAtom as AtomInternal<never>)._equals,
                   persist: (realBaseAtom as DerivedAtomInternal<never>)._persist,
@@ -356,10 +352,35 @@ const updateAtoms = () => {
     const updatedAtoms = updateQueue;
     updateQueue = [];
     for (const atom of updatedAtoms) {
-      atom.state.value = atom._nextValue;
-      if ((atom.state.error = atom._nextError)) atom._reject?.(atom._nextError);
-      else atom._resolve?.(atom._nextValue);
-      atom._resolve = atom._reject = atom.state.promise = undefined;
+      if (atom.state.active) {
+        const prevSuccess = atom._hasValue && !atom.state.promise && !atom.state.error;
+        if ((atom.state.error = atom._nextError)) {
+          atom._nextValue = atom.state.value;
+          if (atom._reject) {
+            atom._reject(atom._nextError);
+            atom._reject = atom._reject = atom.state.promise = undefined;
+          }
+        } else {
+          if (
+            !atom._hasValue ||
+            (!Object.is(atom._nextValue, atom.state.value) &&
+              !atom._equals?.(atom._nextValue, atom.state.value!))
+          ) {
+            atom.state.value = atom._nextValue;
+            atom._valueChanged = atom._hasValue = true;
+          } else {
+            atom._nextValue = atom.state.value;
+            if (prevSuccess) {
+              atom._needPropagate = false;
+              continue;
+            }
+          }
+          if (atom._resolve) {
+            atom._resolve(atom._nextValue!);
+            atom._resolve = atom._reject = atom.state.promise = undefined;
+          }
+        }
+      }
       mark(atom);
     }
   }
@@ -388,7 +409,28 @@ const propagate = <Value>(atom: AtomInternal<Value>) => {
       }
     }
   }
-  if (atom._valueChanged && !atom.state.error && !atom.state.promise) {
+  if (atom.state.promise) {
+    if (atom._children) {
+      for (const child of atom._children) {
+        child.state.promise ??= new Promise((resolve, reject) => {
+          child._resolve = resolve;
+          child._reject = reject;
+        });
+        child._needPropagate = true;
+      }
+    }
+  } else if (atom.state.error) {
+    if (atom._children) {
+      for (const child of atom._children) {
+        child.state.error = child._nextError = atom.state.error;
+        if (child._reject) {
+          child._reject(child._nextError);
+          child._resolve = child._reject = child.state.promise = undefined;
+        }
+        child._needPropagate = true;
+      }
+    }
+  } else if (atom._valueChanged) {
     if (atom._subscribers) {
       for (const subscriber of atom._subscribers) {
         if (subscriber._ctrl) {
@@ -407,14 +449,19 @@ const propagate = <Value>(atom: AtomInternal<Value>) => {
         child._needExecute = true;
       }
     }
-  } else if (atom._children) {
-    for (const child of atom._children) {
-      child.state.error = atom.state.error;
-      child.state.promise = atom.state.promise;
-      child._needPropagate = true;
+  } else {
+    if (atom._children) {
+      for (const child of atom._children) {
+        child.state.error = child._nextError = undefined;
+        if (child._resolve) {
+          child._resolve(child.state.value);
+          child._resolve = child._reject = child.state.promise = undefined;
+        }
+        child._needPropagate = true;
+      }
     }
   }
-  atom._valueChanged = atom._source;
+  atom._valueChanged = false;
 };
 const mark = (atom: AtomInternal<any>) => {
   if (!atom._marked) {
@@ -438,18 +485,18 @@ const expired = Symbol();
 const loading = Symbol();
 const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
   const counter = ++atom._counter;
-  const prevSuccess = atom.state.active && !atom.state.error && !atom.state.promise;
+  const prevSuccess = atom._hasValue && !atom.state.promise && !atom.state.error;
 
   atom.state.active = true;
-  atom._needExecute = atom._valueChanged = false;
+  atom._needExecute = false;
 
   if (atom._dependencies) {
     for (const dep of atom._dependencies) {
       dep._children!.delete(atom);
+      // TODO?: if (dep.aggressiveGc) disableAtom(dep);
     }
     atom._dependencies.clear();
   }
-  atom._resolve = atom._reject = atom.state.promise = undefined;
   if (atom._ctrl) {
     atom._ctrl.abort();
     atom._ctrl = undefined;
@@ -487,16 +534,13 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
         (value) => {
           if (counter === atom._counter) {
             ++atom._counter;
-            if (!atom._hasValue || !equals(value, atom.state.value!, atom._equals)) {
-              atom._valueChanged = atom._hasValue = true;
-              atom._nextValue = value;
-            }
+            if (!atom._hasValue || !Object.is(value, atom._nextValue!)) atom._nextValue = value;
             atom._nextError = undefined;
             requestPropagate(atom);
           }
         },
         (e) => {
-          if (counter === atom._counter) {
+          if (counter === atom._counter && e !== expired) {
             ++atom._counter;
             if (e !== loading) {
               if (e instanceof Wrapped) {
@@ -505,38 +549,46 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
                 logError(e);
               }
               atom._nextError = e;
+              requestPropagate(atom);
             }
-            requestPropagate(atom);
           }
         },
       );
     } else {
       ++atom._counter;
-      if (!atom._hasValue || !equals(value, atom.state.value!, atom._equals)) {
-        atom._valueChanged = atom._hasValue = true;
+      if (
+        !atom._hasValue ||
+        (!Object.is(value, atom._nextValue) && !atom._equals?.(value, atom._nextValue!))
+      ) {
         atom.state.value = atom._nextValue = value;
+        atom._valueChanged = atom._hasValue = true;
       } else if (prevSuccess) {
         atom._needPropagate = false;
       }
       atom.state.error = atom._nextError = undefined;
+      if (atom._resolve) {
+        atom._resolve(atom._nextValue!);
+        atom._resolve = atom._reject = atom.state.promise = undefined;
+      }
     }
   } catch (e) {
-    if (e === expired) {
-      atom._needPropagate = false;
+    // assert(e !== expired);
+    ++atom._counter;
+    if (e === loading) {
+      atom.state.promise ??= new Promise((resolve, reject) => {
+        atom._resolve = resolve;
+        atom._reject = reject;
+      });
     } else {
-      ++atom._counter;
-      if (e === loading) {
-        atom.state.promise ??= new Promise((resolve, reject) => {
-          atom._resolve = resolve;
-          atom._reject = reject;
-        });
+      if (e instanceof Wrapped) {
+        e = e.e;
       } else {
-        if (e instanceof Wrapped) {
-          e = e.e;
-        } else {
-          logError(e);
-        }
-        atom.state.error = atom._nextError = e;
+        logError(e);
+      }
+      atom.state.error = atom._nextError = e;
+      if (atom._reject) {
+        atom._reject(e);
+        atom._reject = atom._reject = atom.state.promise = undefined;
       }
     }
   }
@@ -569,6 +621,8 @@ const gc = () => {
       !atom._subscribers?.size
     ) {
       atom._ctrl?.abort();
+      atom._reject?.(null);
+      ++atom._counter;
       atom._nextValue =
         atom._nextError =
         atom.state.error =
@@ -578,7 +632,7 @@ const gc = () => {
         atom._reject =
         atom._ctrl =
           undefined;
-      atom._needPropagate = atom._needExecute = atom.state.active = false;
+      atom._needPropagate = atom._needExecute = atom._hasValue = atom.state.active = false;
       atom._valueChanged = atom._source;
       if (atom._allDependencies) {
         if (atom._dependencies) {
@@ -597,12 +651,6 @@ const gc = () => {
   gcCandidates.clear();
   runningGc = false;
 };
-
-const equals = <Value>(
-  value: Value,
-  prevValue: Value,
-  equalsFn?: (value: Value, prevValue: Value) => boolean,
-) => Object.is(value, prevValue) || (equalsFn !== undefined && equalsFn(value, prevValue));
 
 const isPromiseLike = (x: unknown): x is PromiseLike<unknown> =>
   typeof (x as PromiseLike<unknown>)?.then === "function";
