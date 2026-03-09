@@ -358,7 +358,7 @@ const updateAtoms = () => {
           atom._nextValue = atom.state.value;
           if (atom._reject) {
             atom._reject(atom._nextError);
-            atom._reject = atom._reject = atom.state.promise = undefined;
+            atom._resolve = atom._reject = atom.state.promise = undefined;
           }
         } else {
           if (
@@ -430,8 +430,8 @@ const propagate = <Value>(atom: AtomInternal<Value>) => {
         child._needPropagate = true;
       }
     }
-  } else if (atom._valueChanged) {
-    if (atom._subscribers) {
+  } else {
+    if (atom._valueChanged && atom._subscribers) {
       for (const subscriber of atom._subscribers) {
         if (subscriber._ctrl) {
           subscriber._ctrl.abort();
@@ -447,17 +447,6 @@ const propagate = <Value>(atom: AtomInternal<Value>) => {
     if (atom._children) {
       for (const child of atom._children) {
         child._needExecute = true;
-      }
-    }
-  } else {
-    if (atom._children) {
-      for (const child of atom._children) {
-        child.state.error = child._nextError = undefined;
-        if (child._resolve) {
-          child._resolve(child.state.value);
-          child._resolve = child._reject = child.state.promise = undefined;
-        }
-        child._needPropagate = true;
       }
     }
   }
@@ -588,7 +577,7 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
       atom.state.error = atom._nextError = e;
       if (atom._reject) {
         atom._reject(e);
-        atom._reject = atom._reject = atom.state.promise = undefined;
+        atom._resolve = atom._reject = atom.state.promise = undefined;
       }
     }
   }
@@ -621,7 +610,7 @@ const gc = () => {
       !atom._subscribers?.size
     ) {
       atom._ctrl?.abort();
-      atom._reject?.(null);
+      // atom._reject?.(null);
       ++atom._counter;
       atom._nextValue =
         atom._nextError =
