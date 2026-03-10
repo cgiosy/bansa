@@ -21,6 +21,7 @@ const createReactMock = (options?: {
   let memoValue: unknown;
 
   return {
+    version: "19.0.0",
     createContext: (defaultValue: unknown) => ({
       _currentValue: defaultValue,
     }),

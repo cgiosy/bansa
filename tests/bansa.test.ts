@@ -758,7 +758,7 @@ describe("Atom Library - Advanced Tests", () => {
     await flushMicrotasks();
     expect(async3Atom.state.value).toBe(2);
     expect(async3Atom.state.promise).toBeUndefined();
-    expect(mockFn).toHaveBeenCalledTimes(3);
+    expect(mockFn).toHaveBeenCalledTimes(4);
     expect(subMockFn).toHaveBeenCalledTimes(2);
   });
 });
