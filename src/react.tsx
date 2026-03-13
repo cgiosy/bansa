@@ -1,5 +1,13 @@
 import * as React from "react";
-import { createContext, useContext, useMemo, useRef, useSyncExternalStore, version } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+  version,
+} from "react";
 import { createScope } from "./atom.ts";
 import type {
   Atom,
@@ -37,7 +45,8 @@ const REACT_MAJOR_VERSION = parseInt(version || "19", 10) || 19;
 const REACT_USE = REACT_MAJOR_VERSION >= 19 && "use" in React;
 export const useAtomValue = <Value,>(atom: Atom<Value>) => {
   atom = useContext(ScopeContext)(atom);
-  const getSnapshot = () => {
+  const subscribe = useCallback((watcher: () => void) => atom.watch(watcher), [atom]);
+  const getSnapshot = useCallback(() => {
     // https://github.com/facebook/react/pull/34032
     try {
       return atom.get();
@@ -49,14 +58,24 @@ export const useAtomValue = <Value,>(atom: Atom<Value>) => {
       }
       throw atom.state.error;
     }
-  };
-  return useSyncExternalStore((watcher) => atom.watch(watcher), getSnapshot, getSnapshot);
+  }, [atom]);
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 };
 
 export const useAtomState = <Value,>(atom: DerivedAtom<Value>) => {
   atom = useContext(ScopeContext)(atom);
   const stateSnapshot = useRef({ ...atom.state });
-  const getSnapshot = () => {
+  const subscribe = useCallback(
+    (watcher: () => void) =>
+      atom.watch(() => {
+        if (!sameAtomState(stateSnapshot.current, atom.state)) {
+          stateSnapshot.current = { ...atom.state };
+          watcher();
+        }
+      }),
+    [atom],
+  );
+  const getSnapshot = useCallback(() => {
     // avoid https://github.com/facebook/react/issues/31730
     try {
       atom.get();
@@ -65,18 +84,8 @@ export const useAtomState = <Value,>(atom: DerivedAtom<Value>) => {
       stateSnapshot.current = { ...atom.state };
     }
     return stateSnapshot.current;
-  };
-  return useSyncExternalStore(
-    (watcher) =>
-      atom.watch(() => {
-        if (!sameAtomState(stateSnapshot.current, atom.state)) {
-          stateSnapshot.current = { ...atom.state };
-          watcher();
-        }
-      }),
-    getSnapshot,
-    getSnapshot,
-  );
+  }, [atom]);
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 };
 
 export const useScopedAtom = (<Value,>(atom: Atom<Value>) =>
