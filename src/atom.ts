@@ -314,7 +314,10 @@ export const createScope = <T extends AtomValuePair<unknown>[]>(
           (realBaseAtom as AtomInternal<never>)._init instanceof Function
             ? $(
                 (get, options) =>
-                  (realBaseAtom as AtomInternal<never>)._init((atom) => get(scope(atom)), options),
+                  (realBaseAtom as AtomInternal<never>)._init(
+                    (atom, watch?: boolean) => get(scope(atom), watch as false),
+                    options,
+                  ),
                 {
                   equals: (realBaseAtom as AtomInternal<never>)._equals,
                   persist: (realBaseAtom as DerivedAtomInternal<never>)._persist,
