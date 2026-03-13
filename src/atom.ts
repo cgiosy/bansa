@@ -627,7 +627,7 @@ const disableAtom = <Value>(atom: AtomInternal<Value>) => {
     gcCandidates.add(atom);
     if (!runningGc) {
       runningGc = true;
-      setTimeout(gc, 0);
+      setTimeout(gc, 1000);
     }
   }
 };

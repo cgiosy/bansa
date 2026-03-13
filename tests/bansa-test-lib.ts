@@ -8,7 +8,7 @@ export const flushMicrotasks = () =>
   });
 export const wait = () =>
   new Promise((resolve) => {
-    setTimeout(resolve, 4);
+    setTimeout(resolve, 1500);
   });
 
 export const inc = (x: number) => x + 1;
