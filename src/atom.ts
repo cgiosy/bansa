@@ -9,7 +9,9 @@ export type PrimitiveAtom<Value> = CommonAtom<Value> & {
   readonly set: (value: AtomUpdater<Value>) => void;
   readonly state: AtomSuccessState<Value>;
 };
-export type DerivedAtom<Value> = CommonAtom<Value>;
+export type DerivedAtom<Value> = CommonAtom<Value> & {
+  readonly refresh: () => void;
+};
 
 export type AtomWatcher = () => void;
 export type AtomSubscribe<Value> = (value: Value, options: AtomSubscriberOptions) => void;
@@ -77,6 +79,7 @@ export type AtomOptions<Value> = {
   equals?: AtomEquals<Value>;
   persist?: boolean;
   eager?: boolean;
+  gcDelay?: number;
 };
 
 export type AtomEquals<Value> = (value: Value, prevValue: Value) => boolean;
@@ -245,9 +248,10 @@ class DerivedAtomInternal<Value> extends CommonAtomInternal<Value> {
   _dependencies: Set<AtomInternal<any>> | undefined;
   _wdependencies: Set<AtomInternal<any>> | undefined;
   _allDependencies: Set<AtomInternal<any>> | undefined;
-
+ 
   declare readonly _init: AtomGetterInternal<Value>;
   declare readonly _equals: AtomEquals<Value> | undefined;
+  declare readonly _gcDelay: number | undefined;
   declare readonly _persist: boolean;
   declare readonly _options: AtomGetOptions;
 
@@ -257,6 +261,7 @@ class DerivedAtomInternal<Value> extends CommonAtomInternal<Value> {
     super();
     this._init = init as AtomGetterInternal<Value>;
     this._equals = options?.equals;
+    this._gcDelay = options?.gcDelay;
     this._persist = !!options?.persist;
 
     const self = this;
@@ -272,6 +277,10 @@ class DerivedAtomInternal<Value> extends CommonAtomInternal<Value> {
       error: undefined,
       value: undefined,
     };
+  }
+
+  refresh() {
+    execute(this as unknown as DerivedAtomInternal<Value>);
   }
 }
 // @ts-expect-error
@@ -624,10 +633,17 @@ const disableAtom = <Value>(atom: AtomInternal<Value>) => {
     !atom._watchers?.size &&
     !atom._subscribers?.size
   ) {
-    gcCandidates.add(atom);
-    if (!runningGc) {
-      runningGc = true;
-      setTimeout(gc, 1000);
+    if (atom._gcDelay) {
+      setTimeout(() => {
+        gcCandidates.add(atom);
+        gc();
+      }, atom._gcDelay);
+    } else {
+      gcCandidates.add(atom);
+        if (!runningGc) {
+        runningGc = true;
+        setTimeout(gc, 0);
+      }
     }
   }
 };
