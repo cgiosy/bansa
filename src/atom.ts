@@ -280,7 +280,8 @@ class DerivedAtomInternal<Value> extends CommonAtomInternal<Value> {
   }
 
   refresh() {
-    execute(this as unknown as DerivedAtomInternal<Value>);
+    this._needExecute = true;
+    requestPropagate(this);
   }
 }
 // @ts-expect-error
