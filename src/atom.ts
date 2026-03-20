@@ -248,7 +248,7 @@ class DerivedAtomInternal<Value> extends CommonAtomInternal<Value> {
   _dependencies: Set<AtomInternal<any>> | undefined;
   _wdependencies: Set<AtomInternal<any>> | undefined;
   _allDependencies: Set<AtomInternal<any>> | undefined;
- 
+
   declare readonly _init: AtomGetterInternal<Value>;
   declare readonly _equals: AtomEquals<Value> | undefined;
   declare readonly _gcDelay: number | undefined;
@@ -641,7 +641,7 @@ const disableAtom = <Value>(atom: AtomInternal<Value>) => {
       }, atom._gcDelay);
     } else {
       gcCandidates.add(atom);
-        if (!runningGc) {
+      if (!runningGc) {
         runningGc = true;
         setTimeout(gc, 0);
       }

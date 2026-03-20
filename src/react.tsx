@@ -21,30 +21,28 @@ import type {
 
 export const ScopeContext = createContext<AtomScope>((x) => x as any);
 
-export const ScopeProvider = ({
-  value,
-  children,
-}: {
-  value?: AtomValuePair<unknown>[];
-  children: React.ReactNode;
-}) => {
+export const useScopedAtom = (<Value,>(atom: Atom<Value>) =>
+  useContext(ScopeContext)(atom)) as UseScopedAtom;
+
+const useForkedScope = (injectedEntries?: AtomValuePair<unknown>[]) => {
   const parentScope = useContext(ScopeContext);
-  const scope = useMemo(
-    () => createScope(value && parentScope, value),
+  return useMemo(
+    () => createScope(injectedEntries && parentScope, injectedEntries),
     // oxlint-disable-next-line exhaustive-deps
-    [parentScope, ...(value || []).flat()],
+    [parentScope, ...(injectedEntries || []).flat()],
   );
-  return <ScopeContext.Provider value={scope}>{children}</ScopeContext.Provider>;
 };
 
-// TODO: cleanup
-const sameAtomState = <Value,>(a: AtomState<Value>, b: AtomState<Value>) =>
-  a.promise === b.promise && Object.is(a.error, b.error) && Object.is(a.value, b.value);
+export const useForkedAtom = <Value,>(
+  atom: DerivedAtom<Value>,
+  injectedEntries?: AtomValuePair<unknown>[],
+) => useForkedScope(injectedEntries)(atom);
 
+// TODO: cleanup
 const REACT_MAJOR_VERSION = parseInt(version || "19", 10) || 19;
 const REACT_USE = REACT_MAJOR_VERSION >= 19 && "use" in React;
 export const useAtomValue = <Value,>(atom: Atom<Value>) => {
-  atom = useContext(ScopeContext)(atom);
+  atom = useScopedAtom(atom);
   const subscribe = useCallback((watcher: () => void) => atom.watch(watcher), [atom]);
   const getSnapshot = useCallback(() => {
     // https://github.com/facebook/react/pull/34032
@@ -62,8 +60,11 @@ export const useAtomValue = <Value,>(atom: Atom<Value>) => {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 };
 
+const sameAtomState = <Value,>(a: AtomState<Value>, b: AtomState<Value>) =>
+  a.promise === b.promise && Object.is(a.error, b.error) && Object.is(a.value, b.value);
+
 export const useAtomState = <Value,>(atom: DerivedAtom<Value>) => {
-  atom = useContext(ScopeContext)(atom);
+  atom = useScopedAtom(atom);
   const stateSnapshot = useRef({ ...atom.state });
   const subscribe = useCallback(
     (watcher: () => void) =>
@@ -88,14 +89,19 @@ export const useAtomState = <Value,>(atom: DerivedAtom<Value>) => {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 };
 
-export const useScopedAtom = (<Value,>(atom: Atom<Value>) =>
-  useContext(ScopeContext)(atom)) as UseScopedAtom;
-
 export const useAtom = <Value,>(atom: PrimitiveAtom<Value>) => {
   atom = useScopedAtom(atom);
   const setAtom = useMemo(() => (newState: AtomUpdater<Value>) => atom.set(newState), [atom]);
   return [useAtomValue(atom), setAtom] as const;
 };
+
+export const ScopeProvider = ({
+  value,
+  children,
+}: {
+  value?: AtomValuePair<unknown>[];
+  children: React.ReactNode;
+}) => <ScopeContext.Provider value={useForkedScope(value)}>{children}</ScopeContext.Provider>;
 
 export type UseScopedAtom = {
   <Value>(baseAtom: PrimitiveAtom<Value>): PrimitiveAtom<Value>;
