@@ -66,7 +66,7 @@ export const $$: CollectAtom = <Value>(init: Value | AtomGetter<Value>) =>
   init instanceof Function
     ? $(
         (get, options) => {
-          let promises: PromiseLike<any>[] | undefined;
+          let promises: PromiseLike<unknown>[] | undefined;
           let error: unknown;
           const result = init((atom) => {
             const state = get(atom, true);

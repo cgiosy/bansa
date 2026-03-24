@@ -20,13 +20,13 @@ export type AtomUpdater<Value> = Value | AtomReducer<Value>;
 // TODO: readonly
 export type AtomInactiveState<Value> = {
   active: false;
-  error: any;
+  error: unknown;
   promise: undefined;
   value?: Value;
 };
 export type AtomPromiseState<Value> = {
   active: true;
-  error: any;
+  error: unknown;
   promise: PromiseLike<Value>;
   value?: Value;
 };
@@ -38,7 +38,7 @@ export type AtomSuccessState<Value> = {
 };
 export type AtomErrorState<Value> = {
   active: true;
-  error: any;
+  error: unknown;
   promise: undefined;
   value?: Value;
 };
@@ -113,7 +113,7 @@ type AtomInternal<Value> = PrimitiveAtomInternal<Value> | DerivedAtomInternal<Va
 
 abstract class CommonAtomInternal<Value> {
   _nextValue: Value | undefined;
-  _nextError: any | undefined;
+  _nextError: unknown | undefined;
   _children: Set<DerivedAtomInternal<any>> | undefined;
   _wchildren: Set<DerivedAtomInternal<any>> | undefined;
   _watchers: Set<AtomWatcher> | undefined;
@@ -125,7 +125,7 @@ abstract class CommonAtomInternal<Value> {
   abstract _needPropagate: boolean;
   abstract _marked: boolean;
   abstract _resolve: ((value: Value) => void) | undefined;
-  abstract _reject: ((reason: any) => void) | undefined;
+  abstract _reject: ((reason: unknown) => void) | undefined;
 
   abstract readonly _init: Value | AtomGetterInternal<Value>;
   abstract readonly _equals: AtomEquals<Value> | undefined;
@@ -243,7 +243,7 @@ class DerivedAtomInternal<Value> extends CommonAtomInternal<Value> {
 
   _counter = 0;
   _resolve: ((value: Value) => void) | undefined;
-  _reject: ((reason: any) => void) | undefined;
+  _reject: ((reason: unknown) => void) | undefined;
   _ctrl: ThenableSignalController | undefined;
   _dependencies: Set<AtomInternal<any>> | undefined;
   _wdependencies: Set<AtomInternal<any>> | undefined;
@@ -295,21 +295,21 @@ export const $: CreateAtom = <Value>(
   return new PrimitiveAtomInternal(init, options) as any;
 };
 
-export const isAtom = (x: unknown): x is Atom<any> => x instanceof CommonAtomInternal;
+export const isAtom = (x: unknown): x is Atom<unknown> => x instanceof CommonAtomInternal;
 
-export const isPrimitiveAtom = (x: unknown): x is PrimitiveAtom<any> =>
+export const isPrimitiveAtom = (x: unknown): x is PrimitiveAtom<unknown> =>
   x instanceof PrimitiveAtomInternal;
 
 export type AtomValuePair<Value> =
   | [Atom<Value>, Value | PrimitiveAtom<Value>]
   | [DerivedAtom<Value>, Value | Atom<Value>];
-export const createScope = <T extends AtomValuePair<any>[]>(
+export const createScope = <T extends AtomValuePair<unknown>[]>(
   parentScope?: AtomScope | null,
   atomValuePairs?: T,
 ): AtomScope => {
-  const scopeMap = new WeakMap<Atom<any>, Atom<any>>();
-  const atomMap = parentScope ? new WeakMap<Atom<any>, Atom<any>>() : scopeMap;
-  const scope = (<T extends Atom<any>>(baseAtom: T, strict = false) => {
+  const scopeMap = new WeakMap<Atom<unknown>, Atom<unknown>>();
+  const atomMap = parentScope ? new WeakMap<Atom<unknown>, Atom<unknown>>() : scopeMap;
+  const scope = (<T extends Atom<unknown>>(baseAtom: T, strict = false) => {
     let scopedAtom = scopeMap.get(baseAtom);
     if (!strict) scopedAtom ||= atomMap.get(baseAtom);
     // TODO: 현재 스코프마다 사용되는 모든 아톰을 저장해서 메모리 사용이 비효율적인데 해결할 수 있을까?
@@ -334,7 +334,7 @@ export const createScope = <T extends AtomValuePair<any>[]>(
                 },
               )
             : // baseAtom을 전달하지 않고 새로 생성하는 이유는 SSR 등에서 사용자 간 상태 공유를 막기 위함
-              parentAtom || $((realBaseAtom as AtomInternal<any>)._init)
+              parentAtom || $((realBaseAtom as AtomInternal<unknown>)._init)
         ) as T),
       );
     }
@@ -350,7 +350,7 @@ export const createScope = <T extends AtomValuePair<any>[]>(
 
 let pendingUpdateAtoms = false;
 let updateQueue: AtomInternal<any>[] = [];
-let stack: AtomInternal<any>[] = [];
+let stack: AtomInternal<unknown>[] = [];
 const requestActivate = <Value>(atom: DerivedAtomInternal<Value>) => {
   if (!atom._needExecute) {
     atom._needExecute = true;
@@ -478,7 +478,7 @@ const propagate = <Value>(atom: AtomInternal<Value>) => {
   }
   atom._valueChanged = false;
 };
-const mark = (atom: AtomInternal<any>) => {
+const mark = (atom: AtomInternal<unknown>) => {
   if (!atom._marked) {
     atom._marked = true;
     if (atom._children) {
@@ -695,8 +695,8 @@ const gc = () => {
   runningGc = false;
 };
 
-const isPromiseLike = (x: unknown): x is PromiseLike<any> =>
-  typeof (x as PromiseLike<any>)?.then === "function";
+const isPromiseLike = (x: unknown): x is PromiseLike<unknown> =>
+  typeof (x as PromiseLike<unknown>)?.then === "function";
 
 const createThenableSignal = () => {
   const ctrl = new AbortController();

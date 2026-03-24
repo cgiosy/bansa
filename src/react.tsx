@@ -24,7 +24,7 @@ export const ScopeContext = createContext<AtomScope>((x) => x as any);
 export const useScopedAtom = (<Value,>(atom: Atom<Value>) =>
   useContext(ScopeContext)(atom)) as UseScopedAtom;
 
-const useForkedScope = (injectedEntries?: AtomValuePair<any>[]) => {
+const useForkedScope = (injectedEntries?: AtomValuePair<unknown>[]) => {
   const parentScope = useContext(ScopeContext);
   return useMemo(
     () => createScope(injectedEntries && parentScope, injectedEntries),
@@ -35,7 +35,7 @@ const useForkedScope = (injectedEntries?: AtomValuePair<any>[]) => {
 
 export const useForkedAtom = <Value,>(
   atom: DerivedAtom<Value>,
-  injectedEntries?: AtomValuePair<any>[],
+  injectedEntries?: AtomValuePair<unknown>[],
 ) => useForkedScope(injectedEntries)(atom);
 
 // TODO: cleanup
@@ -99,7 +99,7 @@ export const ScopeProvider = ({
   value,
   children,
 }: {
-  value?: AtomValuePair<any>[];
+  value?: AtomValuePair<unknown>[];
   children: React.ReactNode;
 }) => <ScopeContext.Provider value={useForkedScope(value)}>{children}</ScopeContext.Provider>;
 
