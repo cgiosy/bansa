@@ -295,21 +295,21 @@ export const $: CreateAtom = <Value>(
   return new PrimitiveAtomInternal(init, options) as any;
 };
 
-export const isAtom = (x: unknown): x is Atom<unknown> => x instanceof CommonAtomInternal;
+export const isAtom = (x: unknown): x is Atom<any> => x instanceof CommonAtomInternal;
 
-export const isPrimitiveAtom = (x: unknown): x is PrimitiveAtom<unknown> =>
+export const isPrimitiveAtom = (x: unknown): x is PrimitiveAtom<any> =>
   x instanceof PrimitiveAtomInternal;
 
 export type AtomValuePair<Value> =
   | [Atom<Value>, Value | PrimitiveAtom<Value>]
   | [DerivedAtom<Value>, Value | Atom<Value>];
-export const createScope = <T extends AtomValuePair<unknown>[]>(
+export const createScope = <T extends AtomValuePair<any>[]>(
   parentScope?: AtomScope | null,
   atomValuePairs?: T,
 ): AtomScope => {
   const scopeMap = new WeakMap<Atom<any>, Atom<any>>();
   const atomMap = parentScope ? new WeakMap<Atom<any>, Atom<any>>() : scopeMap;
-  const scope = (<T extends Atom<unknown>>(baseAtom: T, strict = false) => {
+  const scope = (<T extends Atom<any>>(baseAtom: T, strict = false) => {
     let scopedAtom = scopeMap.get(baseAtom);
     if (!strict) scopedAtom ||= atomMap.get(baseAtom);
     // TODO: 현재 스코프마다 사용되는 모든 아톰을 저장해서 메모리 사용이 비효율적인데 해결할 수 있을까?
@@ -695,8 +695,8 @@ const gc = () => {
   runningGc = false;
 };
 
-const isPromiseLike = (x: unknown): x is PromiseLike<unknown> =>
-  typeof (x as PromiseLike<unknown>)?.then === "function";
+const isPromiseLike = (x: unknown): x is PromiseLike<any> =>
+  typeof (x as PromiseLike<any>)?.then === "function";
 
 const createThenableSignal = () => {
   const ctrl = new AbortController();
