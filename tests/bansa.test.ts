@@ -15,7 +15,7 @@ const flushMicrotasks = () =>
   });
 const wait = () =>
   new Promise((resolve) => {
-    setTimeout(resolve, 1500);
+    setTimeout(resolve, 4);
   });
 
 const inc = (x: number) => x + 1;
@@ -450,7 +450,7 @@ describe("Atom Library - Advanced Tests", () => {
 
     unsub();
     resolve = nop;
-    await new Promise((r) => setTimeout(r, 1500));
+    await new Promise((r) => setTimeout(r, 4));
     expect(metrics1).toEqual({ mounted: 1, unmounted: 1 });
     expect(metrics2).toEqual({ mounted: 2, unmounted: 2 });
     expect(metrics3).toEqual({ mounted: 4, unmounted: 4 });
@@ -499,7 +499,7 @@ describe("Atom Library - Advanced Tests", () => {
     expect(derivedAtom1.state.value).toEqual(20);
 
     unsub2();
-    await new Promise((r) => setTimeout(r, 1500));
+    await new Promise((r) => setTimeout(r, 4));
     expect(metrics1).toEqual({ mounted: 2, unmounted: 2 });
     expect(derivedAtom1.state.value).toEqual(undefined);
 
@@ -592,7 +592,7 @@ describe("Atom Library - Advanced Tests", () => {
     expect($y1.get()).toBe(810);
     expect($y2.get()).toBe(270);
 
-    (scope2($x2) as PrimitiveAtom<number>).set(202);
+    (scope2($x2) as unknown as PrimitiveAtom<number>).set(202);
     await flushMicrotasks();
     expect($x5.get()).toBe(410);
     expect($y0.get()).toBe(410);
@@ -746,7 +746,6 @@ describe("Atom Library - Advanced Tests", () => {
     await flushMicrotasks();
     resolve();
     await flushMicrotasks();
-    console.log(async3Atom.state);
     expect(async3Atom.state.value).toBe(2);
     expect(async3Atom.state.promise).toBeUndefined();
     expect(mockFn).toHaveBeenCalledTimes(3);
@@ -957,13 +956,13 @@ describe("Bansa Documentation Examples as Tests", () => {
 
       // 첫 구독 해제: onCleanup은 아직 호출되지 않음
       unsubAlice();
-      await new Promise((r) => setTimeout(r, 1500)); // disableAtom 대기
+      await new Promise((r) => setTimeout(r, 4)); // disableAtom 대기
       expect(onCleanup).not.toHaveBeenCalled();
       expect(mockWs.send).toHaveBeenCalledWith("-alice");
 
       // 마지막 구독 해제: onCleanup 호출
       unsubBob();
-      await new Promise((r) => setTimeout(r, 1500)); // disableAtom 대기
+      await new Promise((r) => setTimeout(r, 4)); // disableAtom 대기
       expect(onCleanup).toHaveBeenCalledTimes(1);
       expect(mockWs.close).toHaveBeenCalledTimes(1);
       expect(mockWs.send).toHaveBeenCalledWith("-bob");
@@ -1000,7 +999,7 @@ describe("Bansa Documentation Examples as Tests", () => {
 
       // 구독 해제 시: onCleanup 호출
       unsub();
-      await new Promise((r) => setTimeout(r, 1500)); // disableAtom 대기
+      await new Promise((r) => setTimeout(r, 4)); // disableAtom 대기
       expect(onCleanup).toHaveBeenCalledTimes(1);
     });
   });

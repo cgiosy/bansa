@@ -303,15 +303,16 @@ export const isPrimitiveAtom = (x: unknown): x is PrimitiveAtom<unknown> =>
 export type AtomValuePair<Value> =
   | [Atom<Value>, Value | PrimitiveAtom<Value>]
   | [DerivedAtom<Value>, Value | Atom<Value>];
-export const createScope = <T extends AtomValuePair<unknown>[]>(
+export const createScope = (
   parentScope?: AtomScope | null,
-  atomValuePairs?: T,
+  atomValuePairs?: AtomValuePair<any>[],
 ): AtomScope => {
   const scopeMap = new WeakMap<Atom<unknown>, Atom<unknown>>();
   const atomMap = parentScope ? new WeakMap<Atom<unknown>, Atom<unknown>>() : scopeMap;
   const scope = (<T extends Atom<unknown>>(baseAtom: T, strict = false) => {
     let scopedAtom = scopeMap.get(baseAtom);
-    if (!strict) scopedAtom ||= atomMap.get(baseAtom);
+    const scopedDerivedAtom = atomMap.get(baseAtom);
+    if (!strict || (scopedDerivedAtom as DerivedAtomInternal<never> | undefined)?._persist && (scopedDerivedAtom as DerivedAtomInternal<never>)._allDependencies) scopedAtom ||= scopedDerivedAtom;
     // TODO: 현재 스코프마다 사용되는 모든 아톰을 저장해서 메모리 사용이 비효율적인데 해결할 수 있을까?
     // 의존성이 동적이라 많이 어렵다
     if (!scopedAtom) {
