@@ -331,6 +331,7 @@ export const createScope = <T extends AtomValuePair<unknown>[]>(
                 {
                   equals: (realBaseAtom as AtomInternal<never>)._equals,
                   persist: (realBaseAtom as DerivedAtomInternal<never>)._persist,
+                  gcDelay: (realBaseAtom as DerivedAtomInternal<never>)._gcDelay,
                 },
               )
             : // baseAtom을 전달하지 않고 새로 생성하는 이유는 SSR 등에서 사용자 간 상태 공유를 막기 위함
