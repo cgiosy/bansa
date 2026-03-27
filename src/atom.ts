@@ -55,7 +55,10 @@ export type AtomGetter<Value> = (
 ) => Value | PromiseLike<Value>;
 export type AtomReducer<Value> = (value: Value) => Value;
 
-export type AtomGetOptions = { readonly signal: ThenableSignal };
+export type AtomGetOptions = {
+  readonly $: CreateAtom;
+  readonly signal: ThenableSignal;
+};
 export type ThenableSignal = AbortSignal & { then: (f: () => void) => void };
 type ThenableSignalController = {
   abort: () => void;
@@ -77,7 +80,7 @@ type CreateAtom = {
 };
 export type AtomOptions<Value> = {
   equals?: AtomEquals<Value>;
-  persist?: boolean;
+  global?: boolean;
   eager?: boolean;
   gcDelay?: number;
 };
@@ -252,7 +255,7 @@ class DerivedAtomInternal<Value> extends CommonAtomInternal<Value> {
   declare readonly _init: AtomGetterInternal<Value>;
   declare readonly _equals: AtomEquals<Value> | undefined;
   declare readonly _gcDelay: number | undefined;
-  declare readonly _persist: boolean;
+  declare readonly _global: boolean;
   declare readonly _options: AtomGetOptions;
 
   declare state: AtomState<Value>;
@@ -262,10 +265,11 @@ class DerivedAtomInternal<Value> extends CommonAtomInternal<Value> {
     this._init = init as AtomGetterInternal<Value>;
     this._equals = options?.equals;
     this._gcDelay = options?.gcDelay;
-    this._persist = !!options?.persist;
+    this._global = !!options?.global;
 
     const self = this;
     this._options = {
+      $,
       get signal() {
         return (self._ctrl ||= createThenableSignal()).signal;
       },
@@ -309,10 +313,12 @@ export const createScope = (
 ): AtomScope => {
   const scopeMap = new WeakMap<Atom<unknown>, Atom<unknown>>();
   const atomMap = parentScope ? new WeakMap<Atom<unknown>, Atom<unknown>>() : scopeMap;
+  // TODO: scope와 inner$를 잘 통편합할 수 있는 방법이 있는지 고민하기
+  const inner$ = ((init, options) => scope($(init, options))) as CreateAtom;
   const scope = (<T extends Atom<unknown>>(baseAtom: T, strict = false) => {
     let scopedAtom = scopeMap.get(baseAtom);
     const scopedDerivedAtom = atomMap.get(baseAtom);
-    if (!strict || (scopedDerivedAtom as DerivedAtomInternal<never> | undefined)?._persist && (scopedDerivedAtom as DerivedAtomInternal<never>)._allDependencies) scopedAtom ||= scopedDerivedAtom;
+    if (!strict || (scopedDerivedAtom as DerivedAtomInternal<never> | undefined)?._global) scopedAtom ||= scopedDerivedAtom;
     // TODO: 현재 스코프마다 사용되는 모든 아톰을 저장해서 메모리 사용이 비효율적인데 해결할 수 있을까?
     // 의존성이 동적이라 많이 어렵다
     if (!scopedAtom) {
@@ -327,11 +333,14 @@ export const createScope = (
                 (get, options) =>
                   (realBaseAtom as AtomInternal<never>)._init(
                     (atom, watch?: boolean) => get(scope(atom), watch as false),
-                    options,
+                    {
+                      ...options,
+                      $: inner$,
+                    },
                   ),
                 {
                   equals: (realBaseAtom as AtomInternal<never>)._equals,
-                  persist: (realBaseAtom as DerivedAtomInternal<never>)._persist,
+                  global: (realBaseAtom as DerivedAtomInternal<never>)._global,
                   gcDelay: (realBaseAtom as DerivedAtomInternal<never>)._gcDelay,
                 },
               )
@@ -631,7 +640,7 @@ let gcCandidates: Set<DerivedAtomInternal<any>> = new Set();
 const disableAtom = <Value>(atom: AtomInternal<Value>) => {
   if (
     !atom._source &&
-    !atom._persist &&
+    !atom._global &&
     !atom._children?.size &&
     !atom._watchers?.size &&
     !atom._subscribers?.size
@@ -654,7 +663,7 @@ const gc = () => {
   for (const atom of gcCandidates) {
     if (
       !atom._source &&
-      !atom._persist &&
+      !atom._global &&
       !atom._children?.size &&
       !atom._watchers?.size &&
       !atom._subscribers?.size
