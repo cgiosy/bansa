@@ -311,11 +311,25 @@ export const createScope = (
   parentScope?: AtomScope | null,
   atomValuePairs?: AtomValuePair<any>[],
 ): AtomScope => {
-  const scopeMap = new WeakMap<Atom<unknown>, Atom<unknown>>();
-  const atomMap = parentScope ? new WeakMap<Atom<unknown>, Atom<unknown>>() : scopeMap;
-  // TODO: scope와 inner$를 잘 통편합할 수 있는 방법이 있는지 고민하기
-  const inner$ = ((init, options) => scope($(init, options))) as CreateAtom;
-  const scope = (<T extends Atom<unknown>>(baseAtom: T, strict = false) => {
+  const scopeMap = new WeakMap<Atom<any>, Atom<any>>();
+  const atomMap = parentScope ? new WeakMap<Atom<any>, Atom<any>>() : scopeMap;
+  const createDerivedAtom = <Value>(init: AtomGetter<Value>, options?: AtomOptions<Value>): DerivedAtom<Value> => $(
+    (get, options) =>
+      init(
+        (a, watch?: boolean) => get(scope(a), watch as false),
+        {
+          ...options,
+          $: inner$,
+        },
+      ),
+    options,
+  );
+  const inner$ = ((init, options) => {
+    const atom = init instanceof Function ? createDerivedAtom(init, options) : $(init);
+    scopeMap.set(atom, atom);
+    return atom;
+  }) as CreateAtom;
+  const scope = (<T extends Atom<any>>(baseAtom: T, strict = false) => {
     let scopedAtom = scopeMap.get(baseAtom);
     const scopedDerivedAtom = atomMap.get(baseAtom);
     if (!strict || (scopedDerivedAtom as DerivedAtomInternal<never> | undefined)?._global) scopedAtom ||= scopedDerivedAtom;
@@ -329,15 +343,8 @@ export const createScope = (
         baseAtom,
         (scopedAtom = (
           (realBaseAtom as AtomInternal<never>)._init instanceof Function
-            ? $(
-                (get, options) =>
-                  (realBaseAtom as AtomInternal<never>)._init(
-                    (atom, watch?: boolean) => get(scope(atom), watch as false),
-                    {
-                      ...options,
-                      $: inner$,
-                    },
-                  ),
+            ? createDerivedAtom(
+                (realBaseAtom as AtomInternal<never>)._init,
                 {
                   equals: (realBaseAtom as AtomInternal<never>)._equals,
                   global: (realBaseAtom as DerivedAtomInternal<never>)._global,
