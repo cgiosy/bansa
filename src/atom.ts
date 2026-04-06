@@ -83,6 +83,8 @@ export type AtomOptions<Value> = {
   global?: boolean;
   eager?: boolean;
   gcDelay?: number;
+  scope?: AtomScope;
+  $?: CreateAtom;
 };
 
 export type AtomEquals<Value> = (value: Value, prevValue: Value) => boolean;
@@ -202,6 +204,8 @@ class PrimitiveAtomInternal<Value> extends CommonAtomInternal<Value> {
 
   declare readonly _init: Value;
   declare readonly _equals: AtomEquals<Value> | undefined;
+  declare readonly _scope: AtomScope | undefined;
+  declare readonly _$: CreateAtom;
 
   declare state: AtomSuccessState<Value>;
   declare _hasValue: true;
@@ -254,6 +258,7 @@ class DerivedAtomInternal<Value> extends CommonAtomInternal<Value> {
 
   declare readonly _init: AtomGetterInternal<Value>;
   declare readonly _equals: AtomEquals<Value> | undefined;
+  declare readonly _scope: AtomScope | undefined;
   declare readonly _gcDelay: number | undefined;
   declare readonly _global: boolean;
   declare readonly _options: AtomGetOptions;
@@ -264,12 +269,13 @@ class DerivedAtomInternal<Value> extends CommonAtomInternal<Value> {
     super();
     this._init = init as AtomGetterInternal<Value>;
     this._equals = options?.equals;
+    this._scope = options?.scope;
     this._gcDelay = options?.gcDelay;
     this._global = !!options?.global;
 
     const self = this;
     this._options = {
-      $,
+      $: options?.$ ?? $,
       get signal() {
         return (self._ctrl ||= createThenableSignal()).signal;
       },
@@ -313,26 +319,16 @@ export const createScope = (
 ): AtomScope => {
   const scopeMap = new WeakMap<Atom<any>, Atom<any>>();
   const atomMap = parentScope ? new WeakMap<Atom<any>, Atom<any>>() : scopeMap;
-  const createDerivedAtom = <Value>(init: AtomGetter<Value>, options?: AtomOptions<Value>): DerivedAtom<Value> => $(
-    (get, options) =>
-      init(
-        (a, watch?: boolean) => get(scope(a), watch as false),
-        {
-          ...options,
-          $: inner$,
-        },
-      ),
-    options,
-  );
   const inner$ = ((init, options) => {
-    const atom = init instanceof Function ? createDerivedAtom(init, options) : $(init);
+    const atom = init instanceof Function ? $(init, { ...options, scope, $: inner$ }) : $(init);
     scopeMap.set(atom, atom);
     return atom;
   }) as CreateAtom;
   const scope = (<T extends Atom<any>>(baseAtom: T, strict = false) => {
     let scopedAtom = scopeMap.get(baseAtom);
     const scopedDerivedAtom = atomMap.get(baseAtom);
-    if (!strict || (scopedDerivedAtom as DerivedAtomInternal<never> | undefined)?._global) scopedAtom ||= scopedDerivedAtom;
+    if (!strict || (scopedDerivedAtom as DerivedAtomInternal<never> | undefined)?._global)
+      scopedAtom ||= scopedDerivedAtom;
     // TODO: 현재 스코프마다 사용되는 모든 아톰을 저장해서 메모리 사용이 비효율적인데 해결할 수 있을까?
     // 의존성이 동적이라 많이 어렵다
     if (!scopedAtom) {
@@ -343,14 +339,13 @@ export const createScope = (
         baseAtom,
         (scopedAtom = (
           (realBaseAtom as AtomInternal<never>)._init instanceof Function
-            ? createDerivedAtom(
-                (realBaseAtom as AtomInternal<never>)._init,
-                {
-                  equals: (realBaseAtom as AtomInternal<never>)._equals,
-                  global: (realBaseAtom as DerivedAtomInternal<never>)._global,
-                  gcDelay: (realBaseAtom as DerivedAtomInternal<never>)._gcDelay,
-                },
-              )
+            ? $((realBaseAtom as AtomInternal<never>)._init, {
+                equals: (realBaseAtom as AtomInternal<never>)._equals,
+                global: (realBaseAtom as DerivedAtomInternal<never>)._global,
+                gcDelay: (realBaseAtom as DerivedAtomInternal<never>)._gcDelay,
+                scope,
+                $: inner$,
+              })
             : // baseAtom을 전달하지 않고 새로 생성하는 이유는 SSR 등에서 사용자 간 상태 공유를 막기 위함
               parentAtom || $((realBaseAtom as AtomInternal<unknown>)._init)
         ) as T),
@@ -550,6 +545,7 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
   try {
     const value = atom._init(<V>(anotherAtom: AtomInternal<V>, watch = false) => {
       if (counter !== atom._counter) throw expired;
+      if (atom._scope) anotherAtom = atom._scope(anotherAtom) as AtomInternal<V>;
 
       if ((atom as unknown) !== anotherAtom) {
         if (!anotherAtom.state.active) {
