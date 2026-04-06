@@ -26,11 +26,10 @@ export const useScopedAtom = (<Value,>(atom: Atom<Value>) =>
 
 const useForkedScope = (injectedEntries?: AtomValuePair<any>[]) => {
   const parentScope = useContext(ScopeContext);
-  return useMemo(
-    () => createScope(injectedEntries && parentScope, injectedEntries),
-    // oxlint-disable-next-line exhaustive-deps
-    [parentScope, ...(injectedEntries || []).flat()],
-  );
+  const deps = injectedEntries?.flat() || [];
+  deps.push(parentScope);
+  // oxlint-disable-next-line exhaustive-deps
+  return useMemo(() => createScope(injectedEntries && parentScope, injectedEntries), deps);
 };
 
 export const useForkedAtom = <Value,>(

@@ -324,36 +324,29 @@ export const createScope = (
   const scopeMap = new WeakMap<Atom<any>, Atom<any>>();
   const atomMap = parentScope ? new WeakMap<Atom<any>, Atom<any>>() : scopeMap;
   const inner$ = ((init, options) => $(init, { ...options, scope, $: inner$ })) as CreateAtom;
-  const scope = (<T extends Atom<any>>(baseAtom: T, strict = false) => {
+  const scope = (<T extends Atom<never>>(baseAtom: T, strict = false) => {
     if ((baseAtom as AtomInternal<never>)._scope === scope) return baseAtom;
     let scopedAtom = scopeMap.get(baseAtom);
     const scopedDerivedAtom = atomMap.get(baseAtom);
-    if (!strict || (scopedDerivedAtom as DerivedAtomInternal<never> | undefined)?._global)
+    if (!strict || (scopedDerivedAtom as AtomInternal<never> | undefined)?._global)
       scopedAtom ||= scopedDerivedAtom;
     // TODO: 현재 스코프마다 사용되는 모든 아톰을 저장해서 메모리 사용이 비효율적인데 해결할 수 있을까?
     // 의존성이 동적이라 많이 어렵다
     if (!scopedAtom) {
       const parentAtom = parentScope?.(baseAtom, true);
-      if (strict) return parentAtom;
+      if (strict || parentAtom && (!((parentAtom as AtomInternal<never>)._init instanceof Function) || (parentAtom as AtomInternal<never>)._global)) return parentAtom;
       const realBaseAtom = parentAtom || baseAtom;
       atomMap.set(
         baseAtom,
-        (scopedAtom = (
-          (realBaseAtom as AtomInternal<never>)._init instanceof Function
-            ? $((realBaseAtom as DerivedAtomInternal<never>)._init, {
-                equals: (realBaseAtom as DerivedAtomInternal<never>)._equals,
-                global: (realBaseAtom as DerivedAtomInternal<never>)._global,
-                gcDelay: (realBaseAtom as DerivedAtomInternal<never>)._gcDelay,
-                scope,
-                $: inner$,
-              })
-            : // baseAtom을 전달하지 않고 새로 생성하는 이유는 SSR 등에서 사용자 간 상태 공유를 막기 위함
-              parentAtom ||
-              $((realBaseAtom as PrimitiveAtomInternal<never>)._init, {
-                equals: (realBaseAtom as PrimitiveAtomInternal<never>)._equals,
-                global: (realBaseAtom as PrimitiveAtomInternal<never>)._global,
-                scope,
-              })
+        (scopedAtom = $(
+          (realBaseAtom as DerivedAtomInternal<never>)._init,
+          {
+            equals: (realBaseAtom as DerivedAtomInternal<never>)._equals,
+            global: (realBaseAtom as DerivedAtomInternal<never>)._global,
+            gcDelay: (realBaseAtom as DerivedAtomInternal<never>)._gcDelay,
+            scope,
+            $: inner$,
+          }
         ) as T),
       );
     }

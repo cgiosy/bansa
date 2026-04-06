@@ -509,6 +509,22 @@ describe("Atom Library - Advanced Tests", () => {
     expect(derivedAtom1.state.value).toEqual(undefined);
   });
 
+  it("scope with global atom", async () => {
+    const $x1 = $(1);
+    const $x2 = $((get) => get($x1) + 1, { global: true });
+    const $x3 = $((get) => get($x2) + 1);
+    const identity = (x: any) => x;
+    const scope0 = createScope(identity);
+    const scope1 = createScope(scope0, [[$x1, 11]]);
+
+    $x3.subscribe(nop);
+    await flushMicrotasks();
+
+    expect($x3.get()).toBe(3);
+    expect(scope0($x3).get()).toBe(3);
+    expect(scope1($x3).get()).toBe(3);
+  });
+
   it("scope with deep dependencies", async () => {
     const $x1 = $(1);
     const $x2 = $((get) => get($x1) + 1);
