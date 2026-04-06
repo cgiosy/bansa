@@ -294,6 +294,7 @@ class DerivedAtomInternal<Value> extends CommonAtomInternal<Value> {
   }
 
   refresh() {
+    this._hasValue = false;
     this._needExecute = true;
     requestPropagate(this);
   }

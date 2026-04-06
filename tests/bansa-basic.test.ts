@@ -28,6 +28,17 @@ describe("Atom Library - Basic Tests", () => {
     expect(atom.get()).toBe(10);
   });
 
+  it("derived atom (refresh)", async () => {
+    let outer = 1;
+    const derivedAtom1 = $(() => outer + 10);
+    expect(derivedAtom1.get()).toBe(11);
+    
+    outer = 2;
+    derivedAtom1.refresh();
+    await flushMicrotasks();
+    expect(derivedAtom1.get()).toBe(12);
+  });
+
   it("derived atom (batch updates)", async () => {
     const atom = $(1);
     const derivedAtom1 = $((get) => get(atom) + 10);
