@@ -135,6 +135,7 @@ abstract class CommonAtomInternal<Value> {
   abstract readonly _init: Value | AtomGetterInternal<Value>;
   abstract readonly _equals: AtomEquals<Value> | undefined;
   abstract readonly _scope: AtomScope | undefined;
+  abstract readonly _global: boolean;
 
   abstract readonly state: AtomState<Value>;
 
@@ -206,6 +207,7 @@ class PrimitiveAtomInternal<Value> extends CommonAtomInternal<Value> {
   declare readonly _init: Value;
   declare readonly _equals: AtomEquals<Value> | undefined;
   declare readonly _scope: AtomScope | undefined;
+  declare readonly _global: boolean;
 
   declare state: AtomSuccessState<Value>;
   declare _hasValue: true;
@@ -219,6 +221,7 @@ class PrimitiveAtomInternal<Value> extends CommonAtomInternal<Value> {
     this._nextValue = this._init = init;
     this._equals = options?.equals;
     this._scope = options?.scope;
+    this._global = !!options?.global;
     this.state = {
       active: true,
       promise: undefined,
@@ -337,15 +340,20 @@ export const createScope = (
         baseAtom,
         (scopedAtom = (
           (realBaseAtom as AtomInternal<never>)._init instanceof Function
-            ? $((realBaseAtom as AtomInternal<never>)._init, {
-                equals: (realBaseAtom as AtomInternal<never>)._equals,
+            ? $((realBaseAtom as DerivedAtomInternal<never>)._init, {
+                equals: (realBaseAtom as DerivedAtomInternal<never>)._equals,
                 global: (realBaseAtom as DerivedAtomInternal<never>)._global,
                 gcDelay: (realBaseAtom as DerivedAtomInternal<never>)._gcDelay,
                 scope,
                 $: inner$,
               })
             : // baseAtom을 전달하지 않고 새로 생성하는 이유는 SSR 등에서 사용자 간 상태 공유를 막기 위함
-              parentAtom || $((realBaseAtom as AtomInternal<unknown>)._init)
+              parentAtom ||
+              $((realBaseAtom as PrimitiveAtomInternal<never>)._init, {
+                equals: (realBaseAtom as PrimitiveAtomInternal<never>)._equals,
+                global: (realBaseAtom as PrimitiveAtomInternal<never>)._global,
+                scope,
+              })
         ) as T),
       );
     }
