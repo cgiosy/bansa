@@ -134,6 +134,7 @@ abstract class CommonAtomInternal<Value> {
 
   abstract readonly _init: Value | AtomGetterInternal<Value>;
   abstract readonly _equals: AtomEquals<Value> | undefined;
+  abstract readonly _scope: AtomScope | undefined;
 
   abstract readonly state: AtomState<Value>;
 
@@ -205,7 +206,6 @@ class PrimitiveAtomInternal<Value> extends CommonAtomInternal<Value> {
   declare readonly _init: Value;
   declare readonly _equals: AtomEquals<Value> | undefined;
   declare readonly _scope: AtomScope | undefined;
-  declare readonly _$: CreateAtom;
 
   declare state: AtomSuccessState<Value>;
   declare _hasValue: true;
@@ -218,6 +218,7 @@ class PrimitiveAtomInternal<Value> extends CommonAtomInternal<Value> {
     super();
     this._nextValue = this._init = init;
     this._equals = options?.equals;
+    this._scope = options?.scope;
     this.state = {
       active: true,
       promise: undefined,
@@ -319,12 +320,9 @@ export const createScope = (
 ): AtomScope => {
   const scopeMap = new WeakMap<Atom<any>, Atom<any>>();
   const atomMap = parentScope ? new WeakMap<Atom<any>, Atom<any>>() : scopeMap;
-  const inner$ = ((init, options) => {
-    const atom = init instanceof Function ? $(init, { ...options, scope, $: inner$ }) : $(init);
-    scopeMap.set(atom, atom);
-    return atom;
-  }) as CreateAtom;
+  const inner$ = ((init, options) => $(init, { ...options, scope, $: inner$ })) as CreateAtom;
   const scope = (<T extends Atom<any>>(baseAtom: T, strict = false) => {
+    if ((baseAtom as AtomInternal<never>)._scope === scope) return baseAtom;
     let scopedAtom = scopeMap.get(baseAtom);
     const scopedDerivedAtom = atomMap.get(baseAtom);
     if (!strict || (scopedDerivedAtom as DerivedAtomInternal<never> | undefined)?._global)
