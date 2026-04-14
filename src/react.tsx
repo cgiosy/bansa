@@ -21,8 +21,12 @@ import type {
 
 export const ScopeContext = createContext<AtomScope>((x) => x as any);
 
-export const useScopedAtom = (<Value,>(atom: Atom<Value>) =>
-  useContext(ScopeContext)(atom)) as UseScopedAtom;
+const forkedAtomParentMap = new WeakMap<Atom<any>, AtomScope>();
+export const useScopedAtom = (<Value,>(atom: Atom<Value>) => {
+  const scope = useContext(ScopeContext);
+  if (forkedAtomParentMap.get(atom) === scope) return atom;
+  return scope(atom);
+}) as UseScopedAtom;
 
 const useForkedScope = (injectedEntries?: AtomValuePair<any>[]) => {
   const parentScope = useContext(ScopeContext);
@@ -35,7 +39,11 @@ const useForkedScope = (injectedEntries?: AtomValuePair<any>[]) => {
 export const useForkedAtom = <Value,>(
   atom: DerivedAtom<Value>,
   injectedEntries?: AtomValuePair<any>[],
-) => useForkedScope(injectedEntries)(atom);
+) => {
+  atom = useForkedScope(injectedEntries)(atom);
+  forkedAtomParentMap.set(atom, useContext(ScopeContext));
+  return atom;
+};
 
 // TODO: cleanup
 const REACT_MAJOR_VERSION = parseInt(version || "19", 10) || 19;
