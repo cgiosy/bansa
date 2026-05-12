@@ -258,7 +258,6 @@ class DerivedAtomInternal<Value> extends CommonAtomInternal<Value> {
   _ctrl: ThenableSignalController | undefined;
   _dependencies: Set<AtomInternal<any>> | undefined;
   _wdependencies: Set<AtomInternal<any>> | undefined;
-  _allDependencies: Set<AtomInternal<any>> | undefined;
 
   declare readonly _init: AtomGetterInternal<Value>;
   declare readonly _equals: AtomEquals<Value> | undefined;
@@ -335,20 +334,23 @@ export const createScope = (
     // 의존성이 동적이라 많이 어렵다
     if (!scopedAtom) {
       const parentAtom = parentScope?.(baseAtom, true);
-      if (strict || parentAtom && (!((parentAtom as AtomInternal<never>)._init instanceof Function) || (parentAtom as AtomInternal<never>)._global)) return parentAtom;
+      if (
+        strict ||
+        (parentAtom &&
+          (!((parentAtom as AtomInternal<never>)._init instanceof Function) ||
+            (parentAtom as AtomInternal<never>)._global))
+      )
+        return parentAtom;
       const realBaseAtom = parentAtom || baseAtom;
       atomMap.set(
         baseAtom,
-        (scopedAtom = $(
-          (realBaseAtom as DerivedAtomInternal<never>)._init,
-          {
-            equals: (realBaseAtom as DerivedAtomInternal<never>)._equals,
-            global: (realBaseAtom as DerivedAtomInternal<never>)._global,
-            gcDelay: (realBaseAtom as DerivedAtomInternal<never>)._gcDelay,
-            scope,
-            $: inner$,
-          }
-        ) as T),
+        (scopedAtom = $((realBaseAtom as DerivedAtomInternal<never>)._init, {
+          equals: (realBaseAtom as DerivedAtomInternal<never>)._equals,
+          global: (realBaseAtom as DerivedAtomInternal<never>)._global,
+          gcDelay: (realBaseAtom as DerivedAtomInternal<never>)._gcDelay,
+          scope,
+          $: inner$,
+        }) as T),
       );
     }
     return scopedAtom;
@@ -551,7 +553,6 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
         if (!anotherAtom.state.active) {
           execute(anotherAtom as DerivedAtomInternal<V>);
         }
-        (atom._allDependencies ||= new Set()).add(anotherAtom);
         if (watch) {
           atom._dependencies?.delete(anotherAtom);
           (atom._wdependencies ||= new Set()).add(anotherAtom);
@@ -685,23 +686,19 @@ const gc = () => {
           undefined;
       atom._needPropagate = atom._needExecute = atom._hasValue = atom.state.active = false;
       atom._valueChanged = atom._source;
-      if (atom._allDependencies) {
-        if (atom._dependencies) {
-          for (const dep of atom._dependencies) {
-            dep._children!.delete(atom);
-          }
-          atom._dependencies.clear();
-        }
-        if (atom._wdependencies) {
-          for (const dep of atom._wdependencies) {
-            dep._wchildren!.delete(atom);
-          }
-          atom._wdependencies.clear();
-        }
-        for (const dep of atom._allDependencies) {
+      if (atom._dependencies) {
+        for (const dep of atom._dependencies) {
+          dep._children!.delete(atom);
           disableAtom(dep);
         }
-        atom._allDependencies.clear();
+        atom._dependencies.clear();
+      }
+      if (atom._wdependencies) {
+        for (const dep of atom._wdependencies) {
+          dep._wchildren!.delete(atom);
+          disableAtom(dep);
+        }
+        atom._wdependencies.clear();
       }
     }
   }

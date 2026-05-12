@@ -32,7 +32,7 @@ describe("Atom Library - Basic Tests", () => {
     let outer = 1;
     const derivedAtom1 = $(() => outer + 10);
     expect(derivedAtom1.get()).toBe(11);
-    
+
     outer = 2;
     derivedAtom1.refresh();
     await flushMicrotasks();
