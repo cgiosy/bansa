@@ -15,7 +15,7 @@ export type RecursiveOptional<T> =
   | T
   | (T extends object
       ? {
-          [P in keyof T]: RecursiveOptional<T[P]>;
+          [P in keyof T]?: RecursiveOptional<T[P]>;
         }
       : never);
 
@@ -32,7 +32,7 @@ export const atomize = <T>(tree: T): Atomized<T> => {
   if (typeof tree !== "object" || tree === null) return $(tree) as any;
   if (Array.isArray(tree)) return tree.map(atomize) as any;
   const result = Object.create(null);
-  for (const k in tree) result[k] = atomize(tree[k]);
+  for (const k of Object.keys(tree)) result[k] = atomize(tree[k as keyof T]);
   return result;
 };
 
@@ -43,7 +43,7 @@ export const collectAtoms = <T>(tree: T, get = getAtom): CollectedAtoms<T> => {
     if (isAtom(t)) return get(t) as any;
     if (Array.isArray(t)) return t.map(recurse) as any;
     const result = Object.create(null);
-    for (const k in t) result[k] = recurse(t[k] as any);
+    for (const k of Object.keys(t)) result[k] = recurse(t[k as keyof T] as any);
     return result;
   };
   return recurse(tree);
@@ -55,7 +55,8 @@ export const setAtoms = <T>(tree: T, values: RecursiveOptional<CollectedAtoms<T>
       if (isAtom(t)) {
         if (isPrimitiveAtom(t)) t.set(v);
       } else {
-        for (const k in v) recurse(t[k], v[k]);
+        if (v == null) return;
+        for (const k of Object.keys(v)) recurse(t[k], v[k]);
       }
     }
   };
@@ -98,7 +99,7 @@ const shallowEquals = (a: any, b: any): boolean => {
 
   let n = 0;
   for (const k in a) {
-    if (!(k in b && Object.is(a[k], b[k]))) return false;
+    if (!(Object.hasOwn(b, k) && Object.is(a[k], b[k]))) return false;
     n = (n + 1) | 0;
   }
   for (const _ in b) if ((n = (n - 1) | 0) < 0) return false;
