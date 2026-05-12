@@ -12,6 +12,7 @@ import { createScope } from "./atom.ts";
 import type {
   Atom,
   AtomScope,
+  AtomSuccessState,
   AtomState,
   AtomUpdater,
   AtomValuePair,
@@ -68,9 +69,18 @@ export const useAtomValue = <Value,>(atom: Atom<Value>) => {
 };
 
 const sameAtomState = <Value,>(a: AtomState<Value>, b: AtomState<Value>) =>
-  a.promise === b.promise && Object.is(a.error, b.error) && Object.is(a.value, b.value);
+  a.active === b.active &&
+  a.promise === b.promise &&
+  Object.is(a.error, b.error) &&
+  Object.is(a.value, b.value);
 
-export const useAtomState = <Value,>(atom: DerivedAtom<Value>) => {
+type UseAtomState = {
+  <Value>(atom: PrimitiveAtom<Value>): AtomSuccessState<Value>;
+  <Value>(atom: DerivedAtom<Value>): AtomState<Value>;
+  <Value>(atom: Atom<Value>): AtomState<Value>;
+};
+
+export const useAtomState = (<Value,>(atom: Atom<Value>) => {
   atom = useScopedAtom(atom);
   const stateSnapshot = useRef({ ...atom.state });
   const subscribe = useCallback(
@@ -94,7 +104,7 @@ export const useAtomState = <Value,>(atom: DerivedAtom<Value>) => {
     return stateSnapshot.current;
   }, [atom]);
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-};
+}) as UseAtomState;
 
 export const useAtom = <Value,>(atom: PrimitiveAtom<Value>) => {
   atom = useScopedAtom(atom);
