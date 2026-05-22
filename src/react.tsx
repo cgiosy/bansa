@@ -49,7 +49,10 @@ export const useForkedAtom = <Value,>(
 // TODO: cleanup
 const REACT_MAJOR_VERSION = parseInt(version || "19", 10) || 19;
 const REACT_USE = REACT_MAJOR_VERSION >= 19 && "use" in React;
-export const useAtomValue = <Value,>(atom: Atom<Value>) => {
+export const useAtomValue = <Value,>(
+  atom: Atom<Value>,
+  getServerSnapshot?: null | (() => Value),
+) => {
   atom = useScopedAtom(atom);
   const subscribe = useCallback((watcher: () => void) => atom.watch(watcher), [atom]);
   const getSnapshot = useCallback(() => {
@@ -65,9 +68,22 @@ export const useAtomValue = <Value,>(atom: Atom<Value>) => {
       throw atom.state.error;
     }
   }, [atom]);
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    getServerSnapshot === undefined
+      ? getSnapshot
+      : getServerSnapshot === null
+        ? throwPromise
+        : getServerSnapshot,
+  );
 };
 
+const ssrPromise = new Promise(() => {});
+const throwPromise = () => {
+  if (REACT_USE) React.use(ssrPromise);
+  throw ssrPromise;
+};
 const sameAtomState = <Value,>(a: AtomState<Value>, b: AtomState<Value>) =>
   a.active === b.active &&
   a.promise === b.promise &&
@@ -80,7 +96,10 @@ type UseAtomState = {
   <Value>(atom: Atom<Value>): AtomState<Value>;
 };
 
-export const useAtomState = (<Value,>(atom: Atom<Value>) => {
+export const useAtomState = (<Value,>(
+  atom: Atom<Value>,
+  getServerSnapshot?: null | (() => Value),
+) => {
   atom = useScopedAtom(atom);
   const stateSnapshot = useRef({ ...atom.state });
   const subscribe = useCallback(
@@ -93,7 +112,7 @@ export const useAtomState = (<Value,>(atom: Atom<Value>) => {
       }),
     [atom],
   );
-  const getSnapshot = useCallback(() => {
+  const getStateSnapshot = useCallback(() => {
     // avoid https://github.com/facebook/react/issues/31730
     try {
       atom.get();
@@ -103,7 +122,23 @@ export const useAtomState = (<Value,>(atom: Atom<Value>) => {
     }
     return stateSnapshot.current;
   }, [atom]);
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const getServerStateSnapshot = useCallback(
+    () =>
+      getServerSnapshot
+        ? {
+            active: true,
+            error: undefined,
+            promise: undefined,
+            value: getServerSnapshot(),
+          }
+        : stateSnapshot.current,
+    [getServerSnapshot],
+  );
+  return useSyncExternalStore(
+    subscribe,
+    getStateSnapshot,
+    getServerSnapshot === undefined ? getStateSnapshot : getServerStateSnapshot,
+  );
 }) as UseAtomState;
 
 export const useAtom = <Value,>(atom: PrimitiveAtom<Value>) => {
