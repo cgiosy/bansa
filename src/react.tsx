@@ -91,9 +91,9 @@ const sameAtomState = <Value,>(a: AtomState<Value>, b: AtomState<Value>) =>
   Object.is(a.value, b.value);
 
 type UseAtomState = {
-  <Value>(atom: PrimitiveAtom<Value>): AtomSuccessState<Value>;
-  <Value>(atom: DerivedAtom<Value>): AtomState<Value>;
-  <Value>(atom: Atom<Value>): AtomState<Value>;
+  <Value>(atom: PrimitiveAtom<Value>, getServerSnapshot?: null | (() => Value)): AtomSuccessState<Value>;
+  <Value>(atom: DerivedAtom<Value>, getServerSnapshot?: null | (() => Value)): AtomState<Value>;
+  <Value>(atom: Atom<Value>, getServerSnapshot?: null | (() => Value)): AtomState<Value>;
 };
 
 export const useAtomState = (<Value,>(
