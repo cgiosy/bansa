@@ -69,7 +69,7 @@ export const useAtomValue = <Value,>(
     }
   }, [atom]);
   return useSyncExternalStore(
-    subscribe,
+    getServerSnapshot ? nop : subscribe,
     getSnapshot,
     getServerSnapshot === undefined
       ? getSnapshot
@@ -84,6 +84,7 @@ const throwPromise = () => {
   if (REACT_USE) React.use(ssrPromise);
   throw ssrPromise;
 };
+const nop = () => nop;
 const sameAtomState = <Value,>(a: AtomState<Value>, b: AtomState<Value>) =>
   a.active === b.active &&
   a.promise === b.promise &&
@@ -91,7 +92,10 @@ const sameAtomState = <Value,>(a: AtomState<Value>, b: AtomState<Value>) =>
   Object.is(a.value, b.value);
 
 type UseAtomState = {
-  <Value>(atom: PrimitiveAtom<Value>, getServerSnapshot?: null | (() => Value)): AtomSuccessState<Value>;
+  <Value>(
+    atom: PrimitiveAtom<Value>,
+    getServerSnapshot?: null | (() => Value),
+  ): AtomSuccessState<Value>;
   <Value>(atom: DerivedAtom<Value>, getServerSnapshot?: null | (() => Value)): AtomState<Value>;
   <Value>(atom: Atom<Value>, getServerSnapshot?: null | (() => Value)): AtomState<Value>;
 };
@@ -135,7 +139,7 @@ export const useAtomState = (<Value,>(
     [getServerSnapshot],
   );
   return useSyncExternalStore(
-    subscribe,
+    getServerSnapshot ? nop : subscribe,
     getStateSnapshot,
     getServerSnapshot === undefined ? getStateSnapshot : getServerStateSnapshot,
   );
