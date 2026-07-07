@@ -116,10 +116,6 @@ export const useAtomState = (<Value,>(
     [atom],
   );
   const getStateSnapshot = useCallback(() => {
-    // avoid https://github.com/facebook/react/issues/31730
-    try {
-      atom.get();
-    } catch (_) {}
     if (!sameAtomState(stateSnapshot.current, atom.state)) {
       stateSnapshot.current = { ...atom.state };
     }
