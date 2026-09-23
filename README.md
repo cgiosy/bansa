@@ -100,9 +100,10 @@ $count.set(100);
 console.log($count.get(), $countDouble.get()); // !!! 42 84 !!!
 queueMicrotask(() => console.log($count.get(), $countDouble.get())); // 100 200
 
+// 아래는 위 업데이트가 반영된 뒤(다음 마이크로태스크)에 실행된다고 가정합니다.
 const increment = (x) => x + 1;
 $count.set(increment);
-console.log($count.get()); // 101
+queueMicrotask(() => console.log($count.get())); // 101
 ```
 
 모든 업데이트는 마이크로태스크를 단위로 배치 처리됩니다. 즉, 동기적으로 발생하는 여러 업데이트는 한 번에 처리되며, 특히 하나의 상태가 여러 번 업데이트됐을 경우 마지막 값 한 번만 업데이트한 것으로 취급됩니다.
@@ -184,6 +185,8 @@ faultyAtom.watch(() => {
 });
 ```
 
+오류를 받아 가는 곳이 없으면 잡히지 않은 예외로 다시 던져서 놓치지 않게 합니다. `watch`로 지켜보거나 `get()`으로 읽어 오류를 직접 받았다면 다시 던지지 않습니다. `subscribe`는 성공한 값만 받으므로, 구독자만 있는 상태에서 난 오류는 다시 던집니다.
+
 ### 상태의 수명 (`signal`)
 
 파생 함수의 인자로 전달되는 `options.signal`은 `AbortSignal` 및 `Promise` (엄밀히는 thenable)처럼 사용 가능합니다. 상태가 업데이트됐거나, 상태가 비활성화되는 등 상태의 수명이 변했을 때 `abort` 및 `resolve`됩니다.
@@ -198,6 +201,20 @@ const $user = $(async (get, { signal }) => {
     console.log(count, json, "not used");
   });
   return json;
+});
+```
+
+### 자기 자신 다시 계산하기 (`refresh`)
+
+파생 함수의 인자에는 `refresh`도 주어집니다. 이 상태를 다시 계산합니다.
+
+파생 함수 안에서 자기 자신을 다시 계산하려면 바깥 변수로 상태를 가리키는 대신 이것을 쓰세요. 스코프는 같은 파생 함수로 자기 복사본을 만들기 때문에, 바깥 변수가 가리키는 상태는 복사본이 아니라 원본입니다. 같은 이유로 파생 함수 바깥 변수에 든 값은 원본과 복사본이 함께 씁니다.
+
+```javascript
+const $clock = $((_, { signal, refresh }) => {
+  const timer = setTimeout(refresh, 1000);
+  signal.then(() => clearTimeout(timer));
+  return Date.now();
 });
 ```
 

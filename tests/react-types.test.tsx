@@ -1,7 +1,7 @@
 import { describe, it } from "vitest";
 import { $ } from "../src/atom.ts";
-import type { AtomState, AtomSuccessState } from "../src/atom.ts";
-import { useAtomState } from "../src/react.tsx";
+import type { AtomState, AtomSuccessState, PrimitiveAtom } from "../src/atom.ts";
+import { useAtomState, useAtomValue } from "../src/react.tsx";
 
 describe("react types", () => {
   it("useAtomState accepts primitive atoms", () => {
@@ -23,6 +23,22 @@ describe("react types", () => {
       state satisfies AtomState<number>;
       return null;
     };
+
+    void Component;
+  });
+
+  it("hooks and get accept a narrower placeholder where they only read", () => {
+    const $none = $<never[]>([]);
+    const $count = $(() => 1);
+    const Component = ({ list }: { list: PrimitiveAtom<number[]> | null }) => {
+      const state = useAtomState(list ?? $none);
+      state satisfies AtomState<number[]>;
+      const value = useAtomValue(list ?? $none);
+      value satisfies number[];
+      return null;
+    };
+    const $length = $((get) => get($none).length + get($count));
+    $length satisfies { get: () => number };
 
     void Component;
   });
