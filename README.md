@@ -100,9 +100,10 @@ $count.set(100);
 console.log($count.get(), $countDouble.get()); // !!! 42 84 !!!
 queueMicrotask(() => console.log($count.get(), $countDouble.get())); // 100 200
 
+// 아래는 위 업데이트가 반영된 뒤(다음 마이크로태스크)에 실행된다고 가정합니다.
 const increment = (x) => x + 1;
 $count.set(increment);
-console.log($count.get()); // 101
+queueMicrotask(() => console.log($count.get())); // 101
 ```
 
 모든 업데이트는 마이크로태스크를 단위로 배치 처리됩니다. 즉, 동기적으로 발생하는 여러 업데이트는 한 번에 처리되며, 특히 하나의 상태가 여러 번 업데이트됐을 경우 마지막 값 한 번만 업데이트한 것으로 취급됩니다.
