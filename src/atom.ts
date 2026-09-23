@@ -276,6 +276,7 @@ class DerivedAtomInternal<Value> extends CommonAtomInternal<Value> {
   _resolve: ((value: Value) => void) | undefined;
   _reject: ((reason: unknown) => void) | undefined;
   _ctrl: ThenableSignalController | undefined;
+  _gcTimer: ReturnType<typeof setTimeout> | undefined;
   _dependencies: Set<AtomInternal<any>> | undefined;
   _wdependencies: Set<AtomInternal<any>> | undefined;
 
@@ -670,9 +671,11 @@ let gcCandidates: Set<DerivedAtomInternal<any>> = new Set();
 const disableAtom = <Value>(atom: AtomInternal<Value>) => {
   if (!atom._source && !isObserved(atom)) {
     if (atom._gcDelay) {
-      setTimeout(() => {
-        gcCandidates.add(atom);
-        gc();
+      // Counted from the last time it lost its readers, not the first.
+      clearTimeout(atom._gcTimer);
+      atom._gcTimer = setTimeout(() => {
+        atom._gcTimer = undefined;
+        if (!isObserved(atom)) deactivate(atom);
       }, atom._gcDelay);
     } else {
       gcCandidates.add(atom);
@@ -691,6 +694,8 @@ const gc = () => {
   runningGc = false;
 };
 const deactivate = <Value>(atom: DerivedAtomInternal<Value>) => {
+  clearTimeout(atom._gcTimer);
+  atom._gcTimer = undefined;
   atom._ctrl?.abort();
   // Whoever still waits on the pending value would otherwise wait forever.
   const reject = atom._reject;

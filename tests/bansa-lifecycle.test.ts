@@ -305,3 +305,40 @@ describe("signal", () => {
     expect(calls).toEqual(["before", "after"]);
   });
 });
+
+describe("gcDelay", () => {
+  it("counts from the last time the atom lost its readers", async () => {
+    vi.useFakeTimers();
+    try {
+      const atom = $(() => 1, { gcDelay: 100 });
+      let unsubscribe = atom.subscribe(() => {});
+      await vi.advanceTimersByTimeAsync(0);
+      unsubscribe();
+      await vi.advanceTimersByTimeAsync(60);
+      unsubscribe = atom.subscribe(() => {});
+      await vi.advanceTimersByTimeAsync(0);
+      unsubscribe();
+      await vi.advanceTimersByTimeAsync(60);
+      expect(atom.state.active).toBe(true);
+      await vi.advanceTimersByTimeAsync(50);
+      expect(atom.state.active).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps one timer per atom however often it is left", async () => {
+    vi.useFakeTimers();
+    try {
+      const atom = $(() => 1, { gcDelay: 100 });
+      const unsubscribe = atom.subscribe(() => {});
+      await vi.advanceTimersByTimeAsync(0);
+      unsubscribe();
+      expect(atom.state.active).toBe(true);
+      for (let i = 0; i < 20; i++) atom.subscribe(() => {})();
+      expect(vi.getTimerCount()).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
