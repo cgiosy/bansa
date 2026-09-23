@@ -248,3 +248,18 @@ describe("getter errors", () => {
     expect(uncaught).toEqual([]);
   });
 });
+
+describe("get(atom, true)", () => {
+  it("returns a snapshot that later updates do not change", async () => {
+    const $source = $(0);
+    const states: { value?: number }[] = [];
+    const atom = $((get) => get($source, true));
+    atom.subscribe((state) => states.push(state));
+    await wait();
+    $source.set(1);
+    await wait();
+    $source.set(2);
+    await wait();
+    expect(states.map((state) => state.value)).toEqual([0, 1, 2]);
+  });
+});

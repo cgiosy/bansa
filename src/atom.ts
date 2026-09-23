@@ -582,7 +582,9 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
       }
 
       const { state } = anotherAtom;
-      if (watch) return state as V;
+      // A copy: `state` is updated in place, so handing it out would let the
+      // result change later without this atom noticing (it compares by identity).
+      if (watch) return { ...state } as V;
       if (state.promise) throw loading;
       if (state.error) throw new Wrapped(state.error);
       return state.value as V;
