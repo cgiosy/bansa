@@ -285,3 +285,23 @@ describe("getter options in a scope", () => {
     expect(scopedRuns).toBe(2);
   });
 });
+
+describe("signal", () => {
+  it("runs then() callbacks registered before and after the abort", async () => {
+    const calls: string[] = [];
+    let signal: import("../src/index.ts").ThenableSignal | undefined;
+    const atom = $((_, options) => {
+      signal = options.signal;
+      signal.then(() => calls.push("before"));
+      return 0;
+    });
+    const unsubscribe = atom.subscribe(() => {});
+    await wait();
+    unsubscribe();
+    await wait();
+    expect(signal!.aborted).toBe(true);
+    signal!.then(() => calls.push("after"));
+    await wait();
+    expect(calls).toEqual(["before", "after"]);
+  });
+});

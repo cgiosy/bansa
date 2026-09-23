@@ -745,13 +745,13 @@ const isPromiseLike = (x: unknown): x is PromiseLike<unknown> =>
 const createThenableSignal = () => {
   const ctrl = new AbortController();
   const signal = ctrl.signal as ThenableSignal;
-  const promise = new Promise((resolve) => {
-    signal.then = (f: () => void) => promise.then(f);
-    signal.addEventListener("abort", resolve, {
-      once: true,
-      passive: true,
-    });
-  });
+  // Made on the first `then`: most signals are only handed to `fetch` and friends.
+  let aborted: Promise<void> | undefined;
+  signal.then = (f: () => void) =>
+    (aborted ||= new Promise<void>((resolve) => {
+      if (signal.aborted) resolve();
+      else signal.addEventListener("abort", () => resolve(), { once: true, passive: true });
+    })).then(f);
   return {
     abort: () => ctrl.abort(),
     signal,
