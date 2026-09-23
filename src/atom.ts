@@ -300,6 +300,8 @@ class DerivedAtomInternal<Value> extends CommonAtomInternal<Value> {
    * go when it succeeds.
    */
   _dependencies: Map<AtomInternal<any>, Edge> | undefined;
+  /** How many of `_dependencies` the current computation has read. */
+  _read = 0;
 
   declare readonly _init: AtomGetterInternal<Value>;
   declare readonly _equals: AtomEquals<Value> | undefined;
@@ -588,6 +590,7 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
   if (atom._dependencies) {
     for (const edge of atom._dependencies.values()) edge.r = NONE;
   }
+  atom._read = 0;
   if (atom._ctrl) {
     atom._ctrl.abort();
     atom._ctrl = undefined;
@@ -619,6 +622,7 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
           (atom._dependencies ||= new Map()).set(anotherAtom, edge);
           (anotherAtom._children ||= new Map()).set(atom, edge);
         }
+        if (edge.r === NONE) atom._read++;
         // Read both ways in one computation: watching covers reading.
         edge.r = watch || edge.r === WATCH ? WATCH : READ;
       }
@@ -739,7 +743,8 @@ const deactivate = <Value>(atom: DerivedAtomInternal<Value>) => {
 
 /** After a successful computation: let go of earlier dependencies it did not read. */
 const releaseUnread = (atom: DerivedAtomInternal<any>) => {
-  if (!atom._dependencies) return;
+  // Usually it read all of them again.
+  if (!atom._dependencies || atom._read === atom._dependencies.size) return;
   for (const [dep, edge] of atom._dependencies) {
     if (edge.r !== NONE) continue;
     atom._dependencies.delete(dep);
