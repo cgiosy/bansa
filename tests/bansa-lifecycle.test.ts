@@ -443,3 +443,22 @@ describe("dependencies a computation stops reading", () => {
     expect(dep.state.active).toBe(false);
   });
 });
+
+describe("watch", () => {
+  it("unwatching one of two watches with the same function keeps the other", async () => {
+    const $source = $(0);
+    const atom = $((get) => get($source));
+    let calls = 0;
+    const watcher = () => calls++;
+    const unwatch = atom.watch(watcher);
+    atom.watch(watcher);
+    await wait();
+    unwatch();
+    await wait();
+    expect(atom.state.active).toBe(true);
+    calls = 0;
+    $source.set(1);
+    await wait();
+    expect(calls).toBe(1);
+  });
+});

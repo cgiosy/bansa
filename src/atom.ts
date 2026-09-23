@@ -175,9 +175,12 @@ abstract class CommonAtomInternal<Value> {
     if (!this.state.active) {
       requestActivate(this as unknown as DerivedAtomInternal<Value>);
     }
-    (this._watchers ||= new Set()).add(watcher);
+    // A new entry per call: the same function may watch twice, and each
+    // unwatch must remove only its own.
+    const entry = () => watcher();
+    (this._watchers ||= new Set()).add(entry);
     return () => {
-      this._watchers!.delete(watcher);
+      this._watchers!.delete(entry);
       if (!this._watchers!.size) {
         disableAtom(this as unknown as AtomInternal<Value>);
       }
