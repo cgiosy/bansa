@@ -453,10 +453,7 @@ const propagate = <Value>(atom: AtomInternal<Value>) => {
   if (atom.state.promise) {
     if (atom._children) {
       for (const child of atom._children) {
-        child.state.promise ||= new Promise((resolve, reject) => {
-          child._resolve = resolve;
-          child._reject = reject;
-        });
+        child.state.promise ||= createPromise(child);
         child._needPropagate = true;
       }
     }
@@ -571,10 +568,7 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
     }, atom._options);
 
     if (isPromiseLike(value)) {
-      atom.state.promise ||= new Promise((resolve, reject) => {
-        atom._resolve = resolve;
-        atom._reject = reject;
-      });
+      atom.state.promise ||= createPromise(atom);
       value.then(
         (value) => {
           if (counter === atom._counter) {
@@ -620,10 +614,7 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
     // assert(e !== expired);
     ++atom._counter;
     if (e === loading) {
-      atom.state.promise ||= new Promise((resolve, reject) => {
-        atom._resolve = resolve;
-        atom._reject = reject;
-      });
+      atom.state.promise ||= createPromise(atom);
     } else {
       if (e instanceof Wrapped) {
         e = e.e;
@@ -704,6 +695,22 @@ const gc = () => {
   }
   gcCandidates.clear();
   runningGc = false;
+};
+
+const nop = () => {};
+
+/**
+ * `state.promise` of a loading atom. Nobody may be waiting on it: its rejection
+ * is also delivered as `state.error`, so it must not surface as an unhandled
+ * rejection by itself. Callers who do wait still receive the rejection.
+ */
+const createPromise = <Value>(atom: DerivedAtomInternal<Value>) => {
+  const promise = new Promise<Value>((resolve, reject) => {
+    atom._resolve = resolve;
+    atom._reject = reject;
+  });
+  promise.then(undefined, nop);
+  return promise;
 };
 
 const isPromiseLike = (x: unknown): x is PromiseLike<unknown> =>
