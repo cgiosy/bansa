@@ -210,6 +210,23 @@ describe("getter errors", () => {
     expect(uncaught).toEqual([]);
   });
 
+  it("are not rethrown when the watcher that receives them unwatches", async () => {
+    const uncaught = captureQueuedErrors();
+    const source = $(async () => {
+      await Promise.resolve();
+      throw new Error("boom");
+    });
+    let error: unknown;
+    const unwatch = source.watch(() => {
+      if (!source.state.error) return;
+      error = source.state.error;
+      unwatch();
+    });
+    await wait();
+    expect(error).toBeInstanceOf(Error);
+    expect(uncaught).toEqual([]);
+  });
+
   it("are not rethrown when a dependent passes them to a watcher", async () => {
     const uncaught = captureQueuedErrors();
     const source = $(async () => {

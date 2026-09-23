@@ -480,6 +480,8 @@ const updateAtoms = () => {
 };
 const propagate = <Value>(atom: AtomInternal<Value>) => {
   atom._needPropagate = false;
+  // A watcher may unwatch while it reads the state; it still received it.
+  const watched = !!atom._watchers?.size;
   if (atom._watchers) {
     for (const watcher of atom._watchers) {
       try {
@@ -522,8 +524,7 @@ const propagate = <Value>(atom: AtomInternal<Value>) => {
   }
   // Watchers read the error from `state`, and children pass it on. Subscribers
   // only ever see values, so an error that ends here reached nobody.
-  if (!success && !state.promise && !passedOn && !atom._watchers?.size)
-    reportUnreceived(state.error);
+  if (!success && !state.promise && !passedOn && !watched) reportUnreceived(state.error);
   atom._valueChanged = false;
 };
 /** How deep `mark` recurses before it goes on with an explicit stack. */
