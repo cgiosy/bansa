@@ -126,13 +126,23 @@ type AtomSubscribeInternal<Value> = {
 
 type AtomInternal<Value> = PrimitiveAtomInternal<Value> | DerivedAtomInternal<Value>;
 
+/**
+ * A derived atom reading another atom. Both ends keep the same object, so a
+ * computation marks what it read once. `NONE` means an earlier computation read
+ * it and the current one has not (yet): the reader holds on to it but is not
+ * told about its changes.
+ */
+type Edge = { r: typeof NONE | typeof READ | typeof WATCH };
+const NONE = 0;
+const READ = 1;
+/** Read with `get(atom, true)`: told about every change, errors and loading included. */
+const WATCH = 2;
+
 abstract class CommonAtomInternal<Value> {
   _nextValue: Value | undefined;
   _nextError: unknown | undefined;
-  _children: Set<DerivedAtomInternal<any>> | undefined;
-  _wchildren: Set<DerivedAtomInternal<any>> | undefined;
-  /** Atoms that read this one before and may read it again; see `_held`. */
-  _heldBy: Set<DerivedAtomInternal<any>> | undefined;
+  /** Derived atoms reading this one; the other end of their `_dependencies`. */
+  _children: Map<DerivedAtomInternal<any>, Edge> | undefined;
   _watchers: Set<AtomWatcher> | undefined;
   _subscribers: Set<AtomSubscribeInternal<Value>> | undefined;
   _valueChanged = true;
@@ -282,15 +292,14 @@ class DerivedAtomInternal<Value> extends CommonAtomInternal<Value> {
   _reject: ((reason: unknown) => void) | undefined;
   _ctrl: ThenableSignalController | undefined;
   _gcTimer: ReturnType<typeof setTimeout> | undefined;
-  _dependencies: Set<AtomInternal<any>> | undefined;
-  _wdependencies: Set<AtomInternal<any>> | undefined;
   /**
-   * Dependencies of earlier computations, kept alive until one succeeds. A new
-   * computation may read them only after an `await`, or stop early on a loading
-   * dependency; dropping them at its start would collect them and compute them
-   * again when read. Those it did not read are let go when it succeeds.
+   * What this atom reads. Dependencies of earlier computations stay (as `NONE`)
+   * until a computation succeeds: a new one may read them only after an `await`,
+   * or stop early at a loading dependency, and dropping them at its start would
+   * collect them and compute them again when read. Those it did not read are let
+   * go when it succeeds.
    */
-  _held: Set<AtomInternal<any>> | undefined;
+  _dependencies: Map<AtomInternal<any>, Edge> | undefined;
 
   declare readonly _init: AtomGetterInternal<Value>;
   declare readonly _equals: AtomEquals<Value> | undefined;
@@ -476,62 +485,49 @@ const propagate = <Value>(atom: AtomInternal<Value>) => {
       }
     }
   }
-  if (atom._wchildren) {
-    for (const wchild of atom._wchildren) {
-      wchild._needExecute = true;
+  const { state } = atom;
+  const success = !state.promise && !state.error;
+  if (success && atom._valueChanged && atom._subscribers) {
+    for (const subscriber of atom._subscribers) {
+      if (subscriber._ctrl) {
+        subscriber._ctrl.abort();
+        subscriber._ctrl = undefined;
+      }
+      try {
+        subscriber._subscriber(state.value!, subscriber._options);
+      } catch (e) {
+        logError(e);
+      }
     }
   }
-  if (atom.state.promise) {
-    if (atom._children) {
-      for (const child of atom._children) {
+  let passedOn = false;
+  if (atom._children) {
+    for (const [child, edge] of atom._children) {
+      if (edge.r === NONE) continue;
+      passedOn = true;
+      if (edge.r === WATCH || success) {
+        child._needExecute = true;
+      } else if (state.promise) {
         child.state.promise ||= createPromise(child);
         child._needPropagate = true;
-      }
-    }
-  } else if (atom.state.error) {
-    if (atom._children) {
-      for (const child of atom._children) {
-        fail(child, atom.state.error);
+      } else {
+        fail(child, state.error);
         child._needPropagate = true;
       }
     }
-    // Watchers read the error from `state`, and children pass it on. Subscribers
-    // only ever see values, so an error that ends here reached nobody.
-    if (!atom._watchers?.size && !atom._wchildren?.size && !atom._children?.size)
-      reportUnreceived(atom.state.error);
-  } else {
-    if (atom._valueChanged && atom._subscribers) {
-      for (const subscriber of atom._subscribers) {
-        if (subscriber._ctrl) {
-          subscriber._ctrl.abort();
-          subscriber._ctrl = undefined;
-        }
-        try {
-          subscriber._subscriber(atom.state.value!, subscriber._options);
-        } catch (e) {
-          logError(e);
-        }
-      }
-    }
-    if (atom._children) {
-      for (const child of atom._children) {
-        child._needExecute = true;
-      }
-    }
   }
+  // Watchers read the error from `state`, and children pass it on. Subscribers
+  // only ever see values, so an error that ends here reached nobody.
+  if (!success && !state.promise && !passedOn && !atom._watchers?.size)
+    reportUnreceived(state.error);
   atom._valueChanged = false;
 };
 const mark = (atom: AtomInternal<unknown>) => {
   if (!atom._marked) {
     atom._marked = true;
     if (atom._children) {
-      for (const child of atom._children) {
-        mark(child);
-      }
-    }
-    if (atom._wchildren) {
-      for (const child of atom._wchildren) {
-        mark(child);
+      for (const [child, edge] of atom._children) {
+        if (edge.r !== NONE) mark(child);
       }
     }
     stack.push(atom);
@@ -554,18 +550,7 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
   atom._needExecute = false;
 
   if (atom._dependencies) {
-    for (const dep of atom._dependencies) {
-      dep._children!.delete(atom);
-      hold(atom, dep);
-    }
-    atom._dependencies.clear();
-  }
-  if (atom._wdependencies) {
-    for (const dep of atom._wdependencies) {
-      dep._wchildren!.delete(atom);
-      hold(atom, dep);
-    }
-    atom._wdependencies.clear();
+    for (const edge of atom._dependencies.values()) edge.r = NONE;
   }
   if (atom._ctrl) {
     atom._ctrl.abort();
@@ -581,14 +566,14 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
         if (!anotherAtom.state.active) {
           execute(anotherAtom as DerivedAtomInternal<V>);
         }
-        if (watch) {
-          atom._dependencies?.delete(anotherAtom);
-          (atom._wdependencies ||= new Set()).add(anotherAtom);
-          (anotherAtom._wchildren ||= new Set()).add(atom);
-        } else if (!atom._wdependencies?.has(anotherAtom)) {
-          (atom._dependencies ||= new Set()).add(anotherAtom);
-          (anotherAtom._children ||= new Set()).add(atom);
+        let edge = atom._dependencies?.get(anotherAtom);
+        if (!edge) {
+          edge = { r: NONE };
+          (atom._dependencies ||= new Map()).set(anotherAtom, edge);
+          (anotherAtom._children ||= new Map()).set(atom, edge);
         }
+        // Read both ways in one computation: watching covers reading.
+        edge.r = watch || edge.r === WATCH ? WATCH : READ;
       }
 
       const { state } = anotherAtom;
@@ -646,13 +631,11 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
   }
 };
 
-/** Someone reads it, or it must stay active anyway. Watch-mode dependents count too. */
+/** Someone reads it (or may read it again), or it must stay active anyway. */
 const isObserved = <Value>(atom: AtomInternal<Value>) =>
   atom._source ||
   atom._global ||
   !!atom._children?.size ||
-  !!atom._wchildren?.size ||
-  !!atom._heldBy?.size ||
   !!atom._watchers?.size ||
   !!atom._subscribers?.size;
 
@@ -696,42 +679,24 @@ const deactivate = <Value>(atom: DerivedAtomInternal<Value>) => {
   atom._nextValue = atom._nextError = atom.state.error = atom.state.value = atom._ctrl = undefined;
   atom._needPropagate = atom._needExecute = atom._hasValue = atom.state.active = false;
   atom._valueChanged = atom._source;
-  if (atom._held) {
-    for (const dep of atom._held) {
-      dep._heldBy!.delete(atom);
-      disableAtom(dep);
-    }
-    atom._held.clear();
-  }
   if (atom._dependencies) {
-    for (const dep of atom._dependencies) {
+    for (const dep of atom._dependencies.keys()) {
       dep._children!.delete(atom);
       disableAtom(dep);
     }
     atom._dependencies.clear();
   }
-  if (atom._wdependencies) {
-    for (const dep of atom._wdependencies) {
-      dep._wchildren!.delete(atom);
-      disableAtom(dep);
-    }
-    atom._wdependencies.clear();
-  }
 };
 
-const hold = (atom: DerivedAtomInternal<any>, dep: AtomInternal<any>) => {
-  if (dep._source) return;
-  (atom._held ||= new Set()).add(dep);
-  (dep._heldBy ||= new Set()).add(atom);
-};
 /** After a successful computation: let go of earlier dependencies it did not read. */
 const releaseUnread = (atom: DerivedAtomInternal<any>) => {
-  if (!atom._held?.size) return;
-  for (const dep of atom._held) {
-    dep._heldBy!.delete(atom);
-    if (!atom._dependencies?.has(dep) && !atom._wdependencies?.has(dep)) disableAtom(dep);
+  if (!atom._dependencies) return;
+  for (const [dep, edge] of atom._dependencies) {
+    if (edge.r !== NONE) continue;
+    atom._dependencies.delete(dep);
+    dep._children!.delete(atom);
+    disableAtom(dep);
   }
-  atom._held.clear();
 };
 
 const nop = () => {};
