@@ -522,15 +522,44 @@ const propagate = <Value>(atom: AtomInternal<Value>) => {
     reportUnreceived(state.error);
   atom._valueChanged = false;
 };
-const mark = (atom: AtomInternal<unknown>) => {
-  if (!atom._marked) {
-    atom._marked = true;
-    if (atom._children) {
-      for (const [child, edge] of atom._children) {
-        if (edge.r !== NONE) mark(child);
-      }
+/** How deep `mark` recurses before it goes on with an explicit stack. */
+const MAX_MARK_DEPTH = 500;
+
+/**
+ * Marks the atom and everything reading it, pushing each after all its readers:
+ * walking `stack` backwards then visits every atom before its readers.
+ */
+const mark = (atom: AtomInternal<unknown>, depth = 0) => {
+  if (atom._marked) return;
+  if (depth === MAX_MARK_DEPTH) return markDeep(atom);
+  atom._marked = true;
+  if (atom._children) {
+    for (const [child, edge] of atom._children) {
+      if (edge.r !== NONE) mark(child, depth + 1);
     }
-    stack.push(atom);
+  }
+  stack.push(atom);
+};
+/** `mark` without recursion, for graphs deep enough to overflow the call stack. */
+const markDeep = (root: AtomInternal<unknown>) => {
+  root._marked = true;
+  const path: AtomInternal<unknown>[] = [root];
+  const readers: (Iterator<[DerivedAtomInternal<any>, Edge]> | undefined)[] = [
+    root._children?.entries(),
+  ];
+  while (path.length) {
+    const next = readers[readers.length - 1]?.next();
+    if (next && !next.done) {
+      const [child, edge] = next.value;
+      if (edge.r !== NONE && !child._marked) {
+        child._marked = true;
+        path.push(child);
+        readers.push(child._children?.entries());
+      }
+    } else {
+      readers.pop();
+      stack.push(path.pop()!);
+    }
   }
 };
 
@@ -542,6 +571,13 @@ class Wrapped {
 }
 const expired = Symbol();
 const loading = Symbol();
+
+/**
+ * How many inactive atoms a computation may compute on the spot, one reading the
+ * next. Each level recurses through user code; beyond this the rest is deferred.
+ */
+const MAX_EXECUTE_DEPTH = 500;
+let executeDepth = 0;
 const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
   const counter = ++atom._counter;
   const prevSuccess = atom._hasValue && !atom.state.promise && !atom.state.error;
@@ -557,6 +593,7 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
     atom._ctrl = undefined;
   }
 
+  executeDepth++;
   try {
     const value = atom._init(<V>(anotherAtom: AtomInternal<V>, watch = false) => {
       if (counter !== atom._counter) throw expired;
@@ -564,7 +601,17 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
 
       if ((atom as unknown) !== anotherAtom) {
         if (!anotherAtom.state.active) {
-          execute(anotherAtom as DerivedAtomInternal<V>);
+          // Only derived atoms are ever inactive.
+          const inactive = anotherAtom as DerivedAtomInternal<V>;
+          if (executeDepth < MAX_EXECUTE_DEPTH) {
+            execute(inactive);
+          } else {
+            // Computing it here would recurse once more through user code, and a
+            // long enough chain of inactive atoms overflows the stack. Compute it
+            // in the next update instead; until then it is loading.
+            inactive.state.promise ||= createPromise(inactive);
+            requestActivate(inactive);
+          }
         }
         let edge = atom._dependencies?.get(anotherAtom);
         if (!edge) {
@@ -628,6 +675,8 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
     } else {
       fail(atom, e instanceof Wrapped ? e.e : e);
     }
+  } finally {
+    executeDepth--;
   }
 };
 

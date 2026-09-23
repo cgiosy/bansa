@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { $, createScope } from "../src/index.ts";
+import { $, createScope, type Atom } from "../src/index.ts";
 import { wait } from "./bansa-test-lib.ts";
 
 // Getter errors are also rethrown from a microtask (`logError`); keep them out of the run.
@@ -460,5 +460,46 @@ describe("watch", () => {
     $source.set(1);
     await wait();
     expect(calls).toBe(1);
+  });
+});
+
+describe("deep graphs", () => {
+  const chain = (length: number) => {
+    const $source = $(0);
+    let last: Atom<number> = $source;
+    for (let i = 0; i < length; i++) {
+      const previous: Atom<number> = last;
+      last = $((get): number => get(previous) + 1);
+    }
+    return { $source, last };
+  };
+
+  it("activate a long chain of inactive atoms without overflowing the stack", async () => {
+    const { last } = chain(20000);
+    const values: number[] = [];
+    last.subscribe((value) => values.push(value));
+    await wait();
+    expect(values).toEqual([20000]);
+  });
+
+  it("update a long chain without overflowing the stack", async () => {
+    const { $source, last } = chain(20000);
+    const values: number[] = [];
+    last.subscribe((value) => values.push(value));
+    await wait();
+    $source.set(5);
+    await wait();
+    expect(values).toEqual([20000, 20005]);
+  });
+
+  it("settle get() on a long inactive chain", async () => {
+    const { last } = chain(20000);
+    let thrown: unknown;
+    try {
+      last.get();
+    } catch (e) {
+      thrown = e;
+    }
+    await expect(thrown).resolves.toBe(20000);
   });
 });
