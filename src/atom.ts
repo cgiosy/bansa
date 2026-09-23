@@ -58,6 +58,11 @@ export type AtomReducer<Value> = (value: Value) => Value;
 export type AtomGetOptions = {
   readonly $: CreateAtom;
   readonly signal: ThenableSignal;
+  /**
+   * Recomputes this atom. Use it instead of closing over the atom: a scope runs
+   * the same getter for its own copy, and the closed-over atom is the original.
+   */
+  readonly refresh: () => void;
 };
 export type ThenableSignal = AbortSignal & { then: (f: () => void) => void };
 type ThenableSignalController = {
@@ -292,6 +297,7 @@ class DerivedAtomInternal<Value> extends CommonAtomInternal<Value> {
       get signal() {
         return (self._ctrl ||= createThenableSignal()).signal;
       },
+      refresh: () => self.refresh(),
     };
 
     this.state = {

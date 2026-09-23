@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { $ } from "../src/index.ts";
+import { $, createScope } from "../src/index.ts";
 import { wait } from "./bansa-test-lib.ts";
 
 // Getter errors are also rethrown from a microtask (`logError`); keep them out of the run.
@@ -261,5 +261,27 @@ describe("get(atom, true)", () => {
     $source.set(2);
     await wait();
     expect(states.map((state) => state.value)).toEqual([0, 1, 2]);
+  });
+});
+
+describe("getter options in a scope", () => {
+  it("refresh() recomputes the scoped copy, not the original", async () => {
+    const $flag = $(false);
+    let scopedRuns = 0;
+    let refreshCopy = () => {};
+    const atom = $((get, { refresh }) => {
+      if (get($flag)) {
+        scopedRuns++;
+        refreshCopy = refresh;
+      }
+      return 0;
+    });
+    const scoped = createScope(undefined, [[$flag, true]])(atom);
+    scoped.subscribe(() => {});
+    await wait();
+    expect(scopedRuns).toBe(1);
+    refreshCopy();
+    await wait();
+    expect(scopedRuns).toBe(2);
   });
 });
