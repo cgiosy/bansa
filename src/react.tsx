@@ -16,6 +16,7 @@ import type {
   AtomState,
   AtomUpdater,
   AtomValuePair,
+  CommonAtom,
   DerivedAtom,
   PrimitiveAtom,
 } from "./atom.ts";
@@ -72,10 +73,11 @@ const retainForRender = <Value,>(atom: Atom<Value>) => {
   else later();
 };
 export const useAtomValue = <Value,>(
-  atom: Atom<Value>,
+  readable: CommonAtom<Value>,
   getServerSnapshot?: null | (() => Value),
 ) => {
-  atom = useScopedAtom(atom);
+  // Every atom is an `Atom`; `CommonAtom` only widens what callers may pass.
+  const atom = useScopedAtom(readable as Atom<Value>);
   const subscribe = useCallback((watcher: () => void) => atom.watch(watcher), [atom]);
   const getSnapshot = useCallback(() => {
     const wasActive = atom.state.active;
@@ -122,6 +124,7 @@ type UseAtomState = {
   ): AtomSuccessState<Value>;
   <Value>(atom: DerivedAtom<Value>, getServerSnapshot?: null | (() => Value)): AtomState<Value>;
   <Value>(atom: Atom<Value>, getServerSnapshot?: null | (() => Value)): AtomState<Value>;
+  <Value>(atom: CommonAtom<Value>, getServerSnapshot?: null | (() => Value)): AtomState<Value>;
 };
 
 export const useAtomState = (<Value,>(

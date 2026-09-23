@@ -1,4 +1,9 @@
 export type Atom<Value> = PrimitiveAtom<Value> | DerivedAtom<Value>;
+/**
+ * Any atom, seen only as something to read. Unlike `Atom<Value>` it is covariant
+ * (`set` makes `PrimitiveAtom` invariant), so a place that only reads can accept
+ * e.g. an empty placeholder atom typed for a narrower value.
+ */
 export type CommonAtom<Value> = {
   readonly get: () => Value;
   readonly watch: (watcher: AtomWatcher) => () => void;
@@ -71,9 +76,9 @@ type ThenableSignalController = {
 };
 
 export type GetAtom = {
-  <Value>(anotherAtom: Atom<Value>, watch?: false): Value;
+  <Value>(anotherAtom: CommonAtom<Value>, watch?: false): Value;
   <Value>(
-    anotherAtom: Atom<Value>,
+    anotherAtom: CommonAtom<Value>,
     watch: true,
   ): AtomPromiseState<Value> | AtomErrorState<Value> | AtomSuccessState<Value>;
 };
