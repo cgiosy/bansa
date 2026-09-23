@@ -49,19 +49,20 @@ describe("Known Bug Reproductions", () => {
     await flushMicrotasks();
     expect(watch).toHaveBeenCalledTimes(1);
     expect(subscriber).not.toHaveBeenCalled();
-    expect(uncaught).toEqual([boom]);
+    // The watcher received the error, so it is not rethrown as uncaught.
+    expect(uncaught).toEqual([]);
 
     step.set(2);
     await flushMicrotasks();
     expect(watch).toHaveBeenCalledTimes(2);
     expect(subscriber).not.toHaveBeenCalled();
-    expect(uncaught).toEqual([boom]);
+    expect(uncaught).toEqual([]);
 
     step.set(10);
     await flushMicrotasks();
     expect(watch).toHaveBeenCalledTimes(3);
     expect(subscriber).toHaveBeenCalled();
-    expect(uncaught).toEqual([boom]);
+    expect(uncaught).toEqual([]);
   });
 
   it("applies custom equality even when the previous value is undefined", async () => {

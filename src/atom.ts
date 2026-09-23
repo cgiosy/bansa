@@ -485,6 +485,10 @@ const propagate = <Value>(atom: AtomInternal<Value>) => {
         child._needPropagate = true;
       }
     }
+    // Watchers read the error from `state`, and children pass it on. Subscribers
+    // only ever see values, so an error that ends here reached nobody.
+    if (!atom._watchers?.size && !atom._wchildren?.size && !atom._children?.size)
+      reportUnreceived(atom.state.error);
   } else {
     if (atom._valueChanged && atom._subscribers) {
       for (const subscriber of atom._subscribers) {
@@ -599,11 +603,7 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
           if (counter === atom._counter && e !== expired) {
             ++atom._counter;
             if (e !== loading) {
-              if (e instanceof Wrapped) {
-                e = e.e;
-              } else {
-                logError(e);
-              }
+              if (e instanceof Wrapped) e = e.e;
               atom._nextError = e;
               requestPropagate(atom);
             }
@@ -633,11 +633,7 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
     if (e === loading) {
       atom.state.promise ||= createPromise(atom);
     } else {
-      if (e instanceof Wrapped) {
-        e = e.e;
-      } else {
-        logError(e);
-      }
+      if (e instanceof Wrapped) e = e.e;
       atom.state.error = atom._nextError = e;
       if (atom._reject) {
         atom._reject(e);
@@ -747,6 +743,16 @@ const createThenableSignal = () => {
     abort: () => ctrl.abort(),
     signal,
   };
+};
+
+/** One error can reach several dependents that nobody reads; report it once. */
+const reported = new WeakSet<object>();
+const reportUnreceived = (e: unknown) => {
+  if ((typeof e === "object" && e !== null) || typeof e === "function") {
+    if (reported.has(e)) return;
+    reported.add(e);
+  }
+  logError(e);
 };
 
 const logError = (e: unknown) => {

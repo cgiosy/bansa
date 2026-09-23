@@ -197,3 +197,54 @@ describe("watch-mode dependencies", () => {
     expect(values.at(-1)).toBe(1);
   });
 });
+
+describe("getter errors", () => {
+  it("are not rethrown when a watcher receives them", async () => {
+    const uncaught = captureQueuedErrors();
+    const atom = $(() => {
+      throw new Error("boom");
+    });
+    atom.watch(() => {});
+    await wait();
+    expect(atom.state.error).toBeInstanceOf(Error);
+    expect(uncaught).toEqual([]);
+  });
+
+  it("are not rethrown when a dependent passes them to a watcher", async () => {
+    const uncaught = captureQueuedErrors();
+    const source = $(async () => {
+      await Promise.resolve();
+      throw new Error("boom");
+    });
+    const child = $((get) => get(source));
+    child.watch(() => {});
+    await wait();
+    expect(child.state.error).toBeInstanceOf(Error);
+    expect(uncaught).toEqual([]);
+  });
+
+  it("are rethrown once when they reach only subscribers", async () => {
+    const uncaught = captureQueuedErrors();
+    const boom = new Error("boom");
+    const source = $(async () => {
+      await Promise.resolve();
+      throw boom;
+    });
+    const left = $((get) => get(source));
+    const right = $((get) => get(source));
+    left.subscribe(() => {});
+    right.subscribe(() => {});
+    await wait();
+    expect(uncaught).toEqual([boom]);
+  });
+
+  it("are not rethrown when get() throws them to the caller", async () => {
+    const uncaught = captureQueuedErrors();
+    const atom = $(() => {
+      throw new Error("boom");
+    });
+    expect(() => atom.get()).toThrow("boom");
+    await wait();
+    expect(uncaught).toEqual([]);
+  });
+});
