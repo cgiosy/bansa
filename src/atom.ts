@@ -146,6 +146,8 @@ abstract class CommonAtomInternal<Value> {
   _watchers: Set<AtomWatcher> | undefined;
   _subscribers: Set<AtomSubscribeInternal<Value>> | undefined;
   _valueChanged = true;
+  /** The last copy of `state` handed out by `snapshot`. */
+  _snapshot: AtomState<Value> | undefined;
 
   abstract readonly _source: boolean;
   abstract _needExecute: boolean;
@@ -628,9 +630,7 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
       }
 
       const { state } = anotherAtom;
-      // A copy: `state` is updated in place, so handing it out would let the
-      // result change later without this atom noticing (it compares by identity).
-      if (watch) return { ...state } as V;
+      if (watch) return snapshot(anotherAtom) as V;
       if (state.promise) throw loading;
       if (state.error) throw new Wrapped(state.error);
       return state.value as V;
@@ -754,6 +754,26 @@ const releaseUnread = (atom: DerivedAtomInternal<any>) => {
 };
 
 const nop = () => {};
+
+/**
+ * A copy of `state`, since `state` is updated in place: handing it out would let
+ * a result change later without its atom noticing (it compares by identity).
+ * The same copy is reused while nothing in it changed, so readers share it and a
+ * recomputed atom returning it does not count as a change.
+ */
+const snapshot = <Value>(atom: AtomInternal<Value>): AtomState<Value> => {
+  const { state } = atom;
+  const last = atom._snapshot;
+  if (
+    last &&
+    last.active === state.active &&
+    last.promise === state.promise &&
+    Object.is(last.error, state.error) &&
+    Object.is(last.value, state.value)
+  )
+    return last;
+  return (atom._snapshot = { ...state } as AtomState<Value>);
+};
 
 /** Whether `value` replaces `prev`: always for the first value, else unless `equals` says so. */
 const isNewValue = <Value>(

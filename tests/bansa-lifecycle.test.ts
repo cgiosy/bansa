@@ -503,3 +503,23 @@ describe("deep graphs", () => {
     await expect(thrown).resolves.toBe(20000);
   });
 });
+
+describe("get(atom, true) snapshots", () => {
+  it("are reused while the state is unchanged", async () => {
+    const $watched = $(0);
+    const $other = $(0);
+    const atom = $((get) => {
+      get($other);
+      return get($watched, true);
+    });
+    let calls = 0;
+    atom.subscribe(() => calls++);
+    await wait();
+    $other.set(1);
+    await wait();
+    expect(calls).toBe(1);
+    $watched.set(1);
+    await wait();
+    expect(calls).toBe(2);
+  });
+});
