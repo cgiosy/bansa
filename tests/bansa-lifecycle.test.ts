@@ -342,3 +342,104 @@ describe("gcDelay", () => {
     }
   });
 });
+
+describe("dependencies a computation stops reading", () => {
+  it("are let go once a computation succeeds without them", async () => {
+    const $flag = $(true);
+    let aborted = 0;
+    const dep = $((_, { signal }) => {
+      signal.then(() => aborted++);
+      return 1;
+    });
+    const atom = $((get) => (get($flag) ? get(dep) : 0));
+    atom.subscribe(() => {});
+    await wait();
+    expect(dep.state.active).toBe(true);
+    $flag.set(false);
+    await wait();
+    await wait();
+    expect(dep.state.active).toBe(false);
+    expect(aborted).toBe(1);
+  });
+
+  it("are kept while a computation reads them only after an await", async () => {
+    const $n = $(0);
+    let depRuns = 0;
+    const dep = $(() => ++depRuns);
+    const atom = $(async (get) => {
+      const n = get($n);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return n + get(dep);
+    });
+    const values: number[] = [];
+    atom.subscribe((value) => values.push(value));
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    $n.set(1);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(values).toEqual([1, 2]);
+    expect(depRuns).toBe(1);
+  });
+
+  it("are kept across computations that replace each other", async () => {
+    const $n = $(0);
+    let depRuns = 0;
+    const dep = $(() => ++depRuns);
+    const atom = $(async (get) => {
+      const n = get($n);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return n + get(dep);
+    });
+    const values: number[] = [];
+    atom.subscribe((value) => values.push(value));
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    $n.set(1);
+    await wait();
+    $n.set(2);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(values).toEqual([1, 3]);
+    expect(depRuns).toBe(1);
+  });
+
+  it("are kept while a computation stops at a loading dependency", async () => {
+    let resolveSlow = (_: number) => {};
+    const $n = $(0);
+    const slow = $((get) => {
+      get($n);
+      return new Promise<number>((resolve) => (resolveSlow = resolve));
+    });
+    let depRuns = 0;
+    const dep = $(() => ++depRuns);
+    const atom = $((get) => get(slow) + get(dep));
+    atom.subscribe(() => {});
+    await wait();
+    resolveSlow(1);
+    await wait();
+    expect(atom.state.value).toBe(2);
+    $n.set(1);
+    await wait();
+    await wait();
+    resolveSlow(2);
+    await wait();
+    expect(atom.state.value).toBe(3);
+    expect(depRuns).toBe(1);
+  });
+
+  it("are let go when the atom itself is collected", async () => {
+    const $flag = $(true);
+    const dep = $(() => 1);
+    const atom = $((get) => {
+      if (!get($flag)) throw new Error("stop");
+      return get(dep);
+    });
+    const unwatch = atom.watch(() => {});
+    await wait();
+    $flag.set(false);
+    await wait();
+    expect(dep.state.active).toBe(true);
+    unwatch();
+    await wait();
+    await wait();
+    expect(atom.state.active).toBe(false);
+    expect(dep.state.active).toBe(false);
+  });
+});

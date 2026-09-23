@@ -131,6 +131,8 @@ abstract class CommonAtomInternal<Value> {
   _nextError: unknown | undefined;
   _children: Set<DerivedAtomInternal<any>> | undefined;
   _wchildren: Set<DerivedAtomInternal<any>> | undefined;
+  /** Atoms that read this one before and may read it again; see `_held`. */
+  _heldBy: Set<DerivedAtomInternal<any>> | undefined;
   _watchers: Set<AtomWatcher> | undefined;
   _subscribers: Set<AtomSubscribeInternal<Value>> | undefined;
   _valueChanged = true;
@@ -279,6 +281,13 @@ class DerivedAtomInternal<Value> extends CommonAtomInternal<Value> {
   _gcTimer: ReturnType<typeof setTimeout> | undefined;
   _dependencies: Set<AtomInternal<any>> | undefined;
   _wdependencies: Set<AtomInternal<any>> | undefined;
+  /**
+   * Dependencies of earlier computations, kept alive until one succeeds. A new
+   * computation may read them only after an `await`, or stop early on a loading
+   * dependency; dropping them at its start would collect them and compute them
+   * again when read. Those it did not read are let go when it succeeds.
+   */
+  _held: Set<AtomInternal<any>> | undefined;
 
   declare readonly _init: AtomGetterInternal<Value>;
   declare readonly _equals: AtomEquals<Value> | undefined;
@@ -544,14 +553,14 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
   if (atom._dependencies) {
     for (const dep of atom._dependencies) {
       dep._children!.delete(atom);
-      // TODO?: if (dep.aggressiveGc) disableAtom(dep);
+      hold(atom, dep);
     }
     atom._dependencies.clear();
   }
   if (atom._wdependencies) {
     for (const dep of atom._wdependencies) {
       dep._wchildren!.delete(atom);
-      // TODO?: if (dep.aggressiveGc) disableAtom(dep);
+      hold(atom, dep);
     }
     atom._wdependencies.clear();
   }
@@ -596,6 +605,7 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
             ++atom._counter;
             if (!atom._hasValue || !Object.is(value, atom._nextValue!)) atom._nextValue = value;
             atom._nextError = undefined;
+            releaseUnread(atom);
             requestPropagate(atom);
           }
         },
@@ -620,6 +630,7 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
       }
       atom.state.error = atom._nextError = undefined;
       resolvePending(atom, atom._nextValue);
+      releaseUnread(atom);
     }
   } catch (e) {
     // assert(e !== expired);
@@ -638,6 +649,7 @@ const isObserved = <Value>(atom: AtomInternal<Value>) =>
   atom._global ||
   !!atom._children?.size ||
   !!atom._wchildren?.size ||
+  !!atom._heldBy?.size ||
   !!atom._watchers?.size ||
   !!atom._subscribers?.size;
 
@@ -681,6 +693,13 @@ const deactivate = <Value>(atom: DerivedAtomInternal<Value>) => {
   atom._nextValue = atom._nextError = atom.state.error = atom.state.value = atom._ctrl = undefined;
   atom._needPropagate = atom._needExecute = atom._hasValue = atom.state.active = false;
   atom._valueChanged = atom._source;
+  if (atom._held) {
+    for (const dep of atom._held) {
+      dep._heldBy!.delete(atom);
+      disableAtom(dep);
+    }
+    atom._held.clear();
+  }
   if (atom._dependencies) {
     for (const dep of atom._dependencies) {
       dep._children!.delete(atom);
@@ -695,6 +714,21 @@ const deactivate = <Value>(atom: DerivedAtomInternal<Value>) => {
     }
     atom._wdependencies.clear();
   }
+};
+
+const hold = (atom: DerivedAtomInternal<any>, dep: AtomInternal<any>) => {
+  if (dep._source) return;
+  (atom._held ||= new Set()).add(dep);
+  (dep._heldBy ||= new Set()).add(atom);
+};
+/** After a successful computation: let go of earlier dependencies it did not read. */
+const releaseUnread = (atom: DerivedAtomInternal<any>) => {
+  if (!atom._held?.size) return;
+  for (const dep of atom._held) {
+    dep._heldBy!.delete(atom);
+    if (!atom._dependencies?.has(dep) && !atom._wdependencies?.has(dep)) disableAtom(dep);
+  }
+  atom._held.clear();
 };
 
 const nop = () => {};
