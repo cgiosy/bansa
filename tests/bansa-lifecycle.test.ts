@@ -118,3 +118,82 @@ describe("collecting a loading atom", () => {
     expect(unhandled).toEqual([]);
   });
 });
+
+describe("atoms nobody observes", () => {
+  it("are not recomputed while they wait out gcDelay", async () => {
+    const $source = $(0);
+    let runs = 0;
+    const atom = $(
+      (get) => {
+        runs++;
+        return get($source);
+      },
+      { gcDelay: 1000 },
+    );
+    const unsubscribe = atom.subscribe(() => {});
+    await Promise.resolve();
+    expect(runs).toBe(1);
+    unsubscribe();
+    $source.set(1);
+    await wait();
+    $source.set(2);
+    await wait();
+    expect(runs).toBe(1);
+
+    const values: number[] = [];
+    atom.subscribe((value) => values.push(value));
+    await wait();
+    expect(values).toEqual([2]);
+    expect(runs).toBe(2);
+  });
+
+  it("are not recomputed when everyone leaves in the same tick", async () => {
+    const $source = $(0);
+    let runs = 0;
+    const atom = $((get) => {
+      runs++;
+      return get($source);
+    });
+    const unsubscribe = atom.subscribe(() => {});
+    await Promise.resolve();
+    unsubscribe();
+    $source.set(1);
+    await wait();
+    expect(runs).toBe(1);
+  });
+
+  it("are not refreshed", async () => {
+    let runs = 0;
+    const atom = $(
+      () => {
+        runs++;
+        return runs;
+      },
+      { gcDelay: 1000 },
+    );
+    const unsubscribe = atom.subscribe(() => {});
+    await Promise.resolve();
+    unsubscribe();
+    atom.refresh();
+    await wait();
+    expect(runs).toBe(1);
+  });
+});
+
+describe("watch-mode dependencies", () => {
+  it("stay active while a dependent watches them", async () => {
+    const $source = $(0);
+    const atom = $((get) => get($source));
+    const watcher = $((get) => get(atom, true).value);
+    const values: (number | undefined)[] = [];
+    watcher.subscribe((value) => values.push(value));
+    const unsubscribe = atom.subscribe(() => {});
+    await wait();
+    unsubscribe();
+    await wait();
+    expect(atom.state.active).toBe(true);
+    $source.set(1);
+    await wait();
+    expect(values.at(-1)).toBe(1);
+  });
+});

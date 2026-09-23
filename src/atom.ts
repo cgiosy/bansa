@@ -436,6 +436,13 @@ const updateAtoms = () => {
     const atom = markedAtoms[i]!;
     atom._marked = false;
     if (atom._needExecute) {
+      if (!isObserved(atom)) {
+        // Nobody reads it (it is only waiting out `gcDelay`, or everyone left in
+        // this tick). Computing it would repeat its side effects (requests,
+        // connections) for nobody; drop it and let the next reader compute it.
+        deactivate(atom as DerivedAtomInternal<unknown>);
+        continue;
+      }
       atom._needPropagate = true;
       execute(atom);
     }
@@ -640,16 +647,19 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
   }
 };
 
+/** Someone reads it, or it must stay active anyway. Watch-mode dependents count too. */
+const isObserved = <Value>(atom: AtomInternal<Value>) =>
+  atom._source ||
+  atom._global ||
+  !!atom._children?.size ||
+  !!atom._wchildren?.size ||
+  !!atom._watchers?.size ||
+  !!atom._subscribers?.size;
+
 let runningGc = false;
 let gcCandidates: Set<DerivedAtomInternal<any>> = new Set();
 const disableAtom = <Value>(atom: AtomInternal<Value>) => {
-  if (
-    !atom._source &&
-    !atom._global &&
-    !atom._children?.size &&
-    !atom._watchers?.size &&
-    !atom._subscribers?.size
-  ) {
+  if (!atom._source && !isObserved(atom)) {
     if (atom._gcDelay) {
       setTimeout(() => {
         gcCandidates.add(atom);
@@ -666,47 +676,42 @@ const disableAtom = <Value>(atom: AtomInternal<Value>) => {
 };
 const gc = () => {
   for (const atom of gcCandidates) {
-    if (
-      !atom._source &&
-      !atom._global &&
-      !atom._children?.size &&
-      !atom._watchers?.size &&
-      !atom._subscribers?.size
-    ) {
-      atom._ctrl?.abort();
-      // Whoever still waits on the pending value would otherwise wait forever.
-      const reject = atom._reject;
-      ++atom._counter;
-      atom._nextValue =
-        atom._nextError =
-        atom.state.error =
-        atom.state.value =
-        atom.state.promise =
-        atom._resolve =
-        atom._reject =
-        atom._ctrl =
-          undefined;
-      atom._needPropagate = atom._needExecute = atom._hasValue = atom.state.active = false;
-      atom._valueChanged = atom._source;
-      reject?.(new DOMException("The atom was deactivated before it settled.", "AbortError"));
-      if (atom._dependencies) {
-        for (const dep of atom._dependencies) {
-          dep._children!.delete(atom);
-          disableAtom(dep);
-        }
-        atom._dependencies.clear();
-      }
-      if (atom._wdependencies) {
-        for (const dep of atom._wdependencies) {
-          dep._wchildren!.delete(atom);
-          disableAtom(dep);
-        }
-        atom._wdependencies.clear();
-      }
-    }
+    if (!isObserved(atom)) deactivate(atom);
   }
   gcCandidates.clear();
   runningGc = false;
+};
+const deactivate = <Value>(atom: DerivedAtomInternal<Value>) => {
+  atom._ctrl?.abort();
+  // Whoever still waits on the pending value would otherwise wait forever.
+  const reject = atom._reject;
+  ++atom._counter;
+  atom._nextValue =
+    atom._nextError =
+    atom.state.error =
+    atom.state.value =
+    atom.state.promise =
+    atom._resolve =
+    atom._reject =
+    atom._ctrl =
+      undefined;
+  atom._needPropagate = atom._needExecute = atom._hasValue = atom.state.active = false;
+  atom._valueChanged = atom._source;
+  reject?.(new DOMException("The atom was deactivated before it settled.", "AbortError"));
+  if (atom._dependencies) {
+    for (const dep of atom._dependencies) {
+      dep._children!.delete(atom);
+      disableAtom(dep);
+    }
+    atom._dependencies.clear();
+  }
+  if (atom._wdependencies) {
+    for (const dep of atom._wdependencies) {
+      dep._wchildren!.delete(atom);
+      disableAtom(dep);
+    }
+    atom._wdependencies.clear();
+  }
 };
 
 const nop = () => {};
