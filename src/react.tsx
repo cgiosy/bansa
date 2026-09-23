@@ -49,6 +49,28 @@ export const useForkedAtom = <Value,>(
 // TODO: cleanup
 const REACT_MAJOR_VERSION = parseInt(version || "19", 10) || 19;
 const REACT_USE = REACT_MAJOR_VERSION >= 19 && "use" in React;
+
+/**
+ * How long an atom woken up by a render stays alive without a subscriber.
+ * Longer than React's fallback throttle (300ms), so a retry after suspending
+ * still finds it.
+ */
+const RENDER_RETAIN_MS = 1000;
+
+/**
+ * Rendering reads the atom before React subscribes to it, and a render may be
+ * retried later or thrown away. `get()` on an inactive atom only keeps it alive
+ * until its value is ready, so without this the atom could be collected in
+ * between: the retry, or the commit that subscribes, would compute it again
+ * (send the request again, open the connection again).
+ */
+const retainForRender = <Value,>(atom: Atom<Value>) => {
+  const release = atom.watch(() => {});
+  const later = () => setTimeout(release, RENDER_RETAIN_MS);
+  const { promise } = atom.state;
+  if (promise) promise.then(later, later);
+  else later();
+};
 export const useAtomValue = <Value,>(
   atom: Atom<Value>,
   getServerSnapshot?: null | (() => Value),
@@ -56,6 +78,7 @@ export const useAtomValue = <Value,>(
   atom = useScopedAtom(atom);
   const subscribe = useCallback((watcher: () => void) => atom.watch(watcher), [atom]);
   const getSnapshot = useCallback(() => {
+    const wasActive = atom.state.active;
     // https://github.com/facebook/react/pull/34032
     try {
       return atom.get();
@@ -66,6 +89,8 @@ export const useAtomValue = <Value,>(
         throw promise;
       }
       throw atom.state.error;
+    } finally {
+      if (!wasActive) retainForRender(atom);
     }
   }, [atom]);
   return useSyncExternalStore(

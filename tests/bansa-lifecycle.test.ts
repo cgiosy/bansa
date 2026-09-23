@@ -66,3 +66,55 @@ describe("internal promises", () => {
     await expect(promise).rejects.toBe(boom);
   });
 });
+
+describe("get() on an inactive atom", () => {
+  it("settles the promise it throws, and the value is readable afterwards", async () => {
+    let runs = 0;
+    const atom = $(async () => {
+      runs++;
+      await wait();
+      return 1;
+    });
+    let thrown: unknown;
+    try {
+      atom.get();
+    } catch (e) {
+      thrown = e;
+    }
+    // Longer than the zero-delay collection that used to abort it.
+    await expect(thrown).resolves.toBe(1);
+    expect(atom.get()).toBe(1);
+    expect(runs).toBe(1);
+  });
+
+  it("is collected once the value is ready and nobody subscribed", async () => {
+    let aborted = 0;
+    const atom = $(async (_, { signal }) => {
+      signal.then(() => aborted++);
+      await wait();
+      return 1;
+    });
+    try {
+      atom.get();
+    } catch {}
+    await wait();
+    await wait();
+    await wait();
+    expect(atom.state.active).toBe(false);
+    expect(aborted).toBe(1);
+  });
+});
+
+describe("collecting a loading atom", () => {
+  it("rejects the pending promise instead of leaving it pending", async () => {
+    const atom = $(() => new Promise<number>(() => {}));
+    const unwatch = atom.watch(() => {});
+    await Promise.resolve();
+    const promise = atom.state.promise;
+    expect(promise).toBeDefined();
+    unwatch();
+    await expect(promise).rejects.toMatchObject({ name: "AbortError" });
+    expect(atom.state.active).toBe(false);
+    expect(unhandled).toEqual([]);
+  });
+});

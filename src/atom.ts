@@ -142,7 +142,17 @@ abstract class CommonAtomInternal<Value> {
   get(): Value {
     if (!this.state.active) {
       execute(this as unknown as DerivedAtomInternal<Value>);
-      disableAtom(this as unknown as AtomInternal<Value>);
+      // Narrowed to the inactive state above, but `execute` has just changed it.
+      const { promise } = this.state as AtomState<Value>;
+      if (promise) {
+        // The caller is about to wait on this promise. Collecting the atom now
+        // would abort the computation and leave the promise pending forever,
+        // so keep the atom alive until it settles.
+        const release = this.watch(() => {});
+        promise.then(release, release);
+      } else {
+        disableAtom(this as unknown as AtomInternal<Value>);
+      }
     }
     if (this.state.promise) throw this.state.promise;
     if (this.state.error) throw this.state.error;
@@ -664,7 +674,8 @@ const gc = () => {
       !atom._subscribers?.size
     ) {
       atom._ctrl?.abort();
-      // atom._reject?.(null);
+      // Whoever still waits on the pending value would otherwise wait forever.
+      const reject = atom._reject;
       ++atom._counter;
       atom._nextValue =
         atom._nextError =
@@ -677,6 +688,7 @@ const gc = () => {
           undefined;
       atom._needPropagate = atom._needExecute = atom._hasValue = atom.state.active = false;
       atom._valueChanged = atom._source;
+      reject?.(new DOMException("The atom was deactivated before it settled.", "AbortError"));
       if (atom._dependencies) {
         for (const dep of atom._dependencies) {
           dep._children!.delete(atom);
