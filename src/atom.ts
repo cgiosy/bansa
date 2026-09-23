@@ -414,16 +414,9 @@ const updateAtoms = () => {
         const prevSuccess = atom._hasValue && !atom.state.promise && !atom.state.error;
         if ((atom.state.error = atom._nextError)) {
           atom._nextValue = atom.state.value;
-          if (atom._reject) {
-            atom._reject(atom._nextError);
-            atom._resolve = atom._reject = atom.state.promise = undefined;
-          }
+          rejectPending(atom, atom._nextError);
         } else {
-          if (
-            !atom._hasValue ||
-            (!Object.is(atom._nextValue, atom.state.value) &&
-              !atom._equals?.(atom._nextValue, atom.state.value!))
-          ) {
+          if (isNewValue(atom, atom._nextValue, atom.state.value)) {
             atom.state.value = atom._nextValue;
             atom._valueChanged = atom._hasValue = true;
           } else {
@@ -433,10 +426,7 @@ const updateAtoms = () => {
               continue;
             }
           }
-          if (atom._resolve) {
-            atom._resolve(atom._nextValue!);
-            atom._resolve = atom._reject = atom.state.promise = undefined;
-          }
+          resolvePending(atom, atom._nextValue);
         }
       }
       mark(atom);
@@ -489,11 +479,7 @@ const propagate = <Value>(atom: AtomInternal<Value>) => {
   } else if (atom.state.error) {
     if (atom._children) {
       for (const child of atom._children) {
-        child.state.error = child._nextError = atom.state.error;
-        if (child._reject) {
-          child._reject(child._nextError);
-          child._resolve = child._reject = child.state.promise = undefined;
-        }
+        fail(child, atom.state.error);
         child._needPropagate = true;
       }
     }
@@ -626,20 +612,14 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
       );
     } else {
       ++atom._counter;
-      if (
-        !atom._hasValue ||
-        (!Object.is(value, atom._nextValue) && !atom._equals?.(value, atom._nextValue!))
-      ) {
+      if (isNewValue(atom, value, atom._nextValue)) {
         atom.state.value = atom._nextValue = value;
         atom._valueChanged = atom._hasValue = true;
       } else if (prevSuccess) {
         atom._needPropagate = false;
       }
       atom.state.error = atom._nextError = undefined;
-      if (atom._resolve) {
-        atom._resolve(atom._nextValue!);
-        atom._resolve = atom._reject = atom.state.promise = undefined;
-      }
+      resolvePending(atom, atom._nextValue);
     }
   } catch (e) {
     // assert(e !== expired);
@@ -647,12 +627,7 @@ const execute = <Value>(atom: DerivedAtomInternal<Value>) => {
     if (e === loading) {
       atom.state.promise ||= createPromise(atom);
     } else {
-      if (e instanceof Wrapped) e = e.e;
-      atom.state.error = atom._nextError = e;
-      if (atom._reject) {
-        atom._reject(e);
-        atom._resolve = atom._reject = atom.state.promise = undefined;
-      }
+      fail(atom, e instanceof Wrapped ? e.e : e);
     }
   }
 };
@@ -698,20 +673,14 @@ const deactivate = <Value>(atom: DerivedAtomInternal<Value>) => {
   atom._gcTimer = undefined;
   atom._ctrl?.abort();
   // Whoever still waits on the pending value would otherwise wait forever.
-  const reject = atom._reject;
+  rejectPending(
+    atom,
+    new DOMException("The atom was deactivated before it settled.", "AbortError"),
+  );
   ++atom._counter;
-  atom._nextValue =
-    atom._nextError =
-    atom.state.error =
-    atom.state.value =
-    atom.state.promise =
-    atom._resolve =
-    atom._reject =
-    atom._ctrl =
-      undefined;
+  atom._nextValue = atom._nextError = atom.state.error = atom.state.value = atom._ctrl = undefined;
   atom._needPropagate = atom._needExecute = atom._hasValue = atom.state.active = false;
   atom._valueChanged = atom._source;
-  reject?.(new DOMException("The atom was deactivated before it settled.", "AbortError"));
   if (atom._dependencies) {
     for (const dep of atom._dependencies) {
       dep._children!.delete(atom);
@@ -729,6 +698,34 @@ const deactivate = <Value>(atom: DerivedAtomInternal<Value>) => {
 };
 
 const nop = () => {};
+
+/** Whether `value` replaces `prev`: always for the first value, else unless `equals` says so. */
+const isNewValue = <Value>(
+  atom: AtomInternal<Value>,
+  value: Value | undefined,
+  prev: Value | undefined,
+) => !atom._hasValue || (!Object.is(value, prev) && !atom._equals?.(value!, prev!));
+
+/** Settles the promise handed out while loading, if there is one. */
+const resolvePending = <Value>(atom: AtomInternal<Value>, value: Value | undefined) => {
+  const resolve = atom._resolve;
+  if (resolve) {
+    atom._resolve = atom._reject = atom.state.promise = undefined;
+    resolve(value!);
+  }
+};
+const rejectPending = <Value>(atom: AtomInternal<Value>, error: unknown) => {
+  const reject = atom._reject;
+  if (reject) {
+    atom._resolve = atom._reject = atom.state.promise = undefined;
+    reject(error);
+  }
+};
+
+const fail = <Value>(atom: DerivedAtomInternal<Value>, error: unknown) => {
+  atom.state.error = atom._nextError = error;
+  rejectPending(atom, error);
+};
 
 /**
  * `state.promise` of a loading atom. Nobody may be waiting on it: its rejection
